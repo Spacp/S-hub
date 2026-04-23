@@ -4,6 +4,7 @@ local Players = game:GetService("Players")
 local RunService = game:GetService("RunService")
 local Debris = game:GetService("Debris")
 local CoreGui = game:GetService("CoreGui")
+local SoundService = game:GetService("SoundService") -- Añadido para sonidos más confiables
 
 local LocalPlayer = Players.LocalPlayer
 
@@ -32,9 +33,10 @@ end
 -- NUEVO SONIDO DE TELETRANSPORTE
 local function PlayTeleportSound()
     pcall(function()
-        local sound = Instance.new("Sound", ScreenGui)
-        sound.SoundId = "rbxassetid://127439510287856" -- La ID que me pediste
-        sound.Volume = 2 -- Ajustado para que suene bien y claro
+        local sound = Instance.new("Sound")
+        sound.SoundId = "rbxassetid://127439510287856" 
+        sound.Volume = 2 
+        sound.Parent = SoundService -- Reproducir en SoundService es mucho más seguro
         sound:Play()
         Debris:AddItem(sound, 4) 
     end)
@@ -96,6 +98,7 @@ local function applyTagToPlayer(player)
             OrbContainer.Size = UDim2.new(1, 0, 1, 0)
             OrbContainer.BackgroundTransparency = 1
             OrbContainer.ZIndex = 1
+            OrbContainer.Active = false -- Evita que bloquee el clic
 
             local LogoContainer = Instance.new("Frame", TagButton)
             LogoContainer.Name = "CodeLogo"
@@ -104,6 +107,7 @@ local function applyTagToPlayer(player)
             LogoContainer.BackgroundColor3 = Color3.fromRGB(15, 15, 15) 
             LogoContainer.BackgroundTransparency = 0.15 
             LogoContainer.ZIndex = 3
+            LogoContainer.Active = false -- Evita que bloquee el clic
             
             local LogoCorner = Instance.new("UICorner", LogoContainer)
             LogoCorner.CornerRadius = UDim.new(0.25, 0)
@@ -127,6 +131,7 @@ local function applyTagToPlayer(player)
             ContentContainer.Position = UDim2.new(0, 42, 0, 0)
             ContentContainer.BackgroundTransparency = 1
             ContentContainer.ZIndex = 2
+            ContentContainer.Active = false
 
             local ContentLayout = Instance.new("UIListLayout", ContentContainer)
             ContentLayout.FillDirection = Enum.FillDirection.Horizontal
@@ -149,16 +154,21 @@ local function applyTagToPlayer(player)
             -----------------------------------------------------
             -- SISTEMA DE TELETRANSPORTE AL HACER CLIC
             -----------------------------------------------------
-            TagButton.MouseButton1Click:Connect(function()
+            -- Usamos .Activated en lugar de .MouseButton1Click para mayor compatibilidad
+            TagButton.Activated:Connect(function()
                 if player == LocalPlayer then return end
                 pcall(function()
                     local lpChar = LocalPlayer.Character
                     local targetChar = player.Character
+                    
                     if lpChar and lpChar:FindFirstChild("HumanoidRootPart") and targetChar and targetChar:FindFirstChild("HumanoidRootPart") then
-                        PlayTeleportSound() -- Aquí suena tu nueva ID
+                        PlayTeleportSound() 
+                        
                         local targetHRP = targetChar.HumanoidRootPart
-                        local newCFrame = targetHRP.CFrame * CFrame.new(4, 0, 0) 
-                        lpChar.HumanoidRootPart.CFrame = newCFrame
+                        local newCFrame = targetHRP.CFrame * CFrame.new(4, 0, 2) 
+                        
+                        -- :PivotTo() es el método definitivo para forzar el TP sin que Roblox lo bloquee
+                        lpChar:PivotTo(newCFrame)
                     end
                 end)
             end)
@@ -183,6 +193,7 @@ local function applyTagToPlayer(player)
                         orb.BackgroundTransparency = 0.4
                         orb.BorderSizePixel = 0
                         orb.ZIndex = 1
+                        orb.Active = false -- Importante para que las partículas no bloqueen el clic
                         Instance.new("UICorner", orb).CornerRadius = UDim.new(1, 0)
                         orb.Parent = OrbContainer
 
