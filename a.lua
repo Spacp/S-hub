@@ -46,7 +46,7 @@ local function PlayTeleportSound()
     pcall(function()
         if not ScreenGui then return end
         local sound = Instance.new("Sound", ScreenGui)
-        sound.SoundId = "rbxassetid://7322277676" 
+        sound.SoundId = "rbxassetid://136701428260164" 
         sound.Volume = 3
         sound:Play()
         Debris:AddItem(sound, 3) 
@@ -143,7 +143,7 @@ _G.applyTagToPlayer = function(player)
             FriendIcon.AnchorPoint = Vector2.new(0.5, 0.5)
             FriendIcon.Position = UDim2.new(0.5, 0, 0.5, 0)
             FriendIcon.BackgroundTransparency = 1
-            FriendIcon.Image = "rbxthumb://type=Asset&id=76848695027869&w=150&h=150"
+            FriendIcon.Image = "rbxthumb://type=Asset&id=136701428260164&w=150&h=150"
             FriendIcon.ZIndex = 4
 
             local ContentContainer = Instance.new("Frame", TagButton)
