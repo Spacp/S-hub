@@ -2,6 +2,7 @@ local TweenService = game:GetService("TweenService")
 local Players = game:GetService("Players")
 local RunService = game:GetService("RunService")
 local Debris = game:GetService("Debris")
+local SoundService = game:GetService("SoundService") -- Añadido SoundService
 local LocalPlayer = Players.LocalPlayer
 
 -- Buscar la interfaz principal creada por el Hub para inyectar los tags ahí
@@ -42,14 +43,20 @@ _G.cleanTags = function(animated)
     end
 end
 
+-- Función de sonido corregida
 local function PlayTeleportSound()
     pcall(function()
-        if not ScreenGui then return end
-        local sound = Instance.new("Sound", ScreenGui)
+        local sound = Instance.new("Sound")
         sound.SoundId = "rbxassetid://127439510287856" 
         sound.Volume = 2
+        sound.Parent = SoundService -- Reproducimos desde SoundService en lugar de ScreenGui
+        
+        if not sound.IsLoaded then
+            sound.Loaded:Wait()
+        end
+        
         sound:Play()
-        Debris:AddItem(sound, 2) 
+        Debris:AddItem(sound, 3) 
     end)
 end
 
