@@ -1,13 +1,24 @@
+-- SCRIPT DE ETIQUETAS ESP (a.lua)
 local TweenService = game:GetService("TweenService")
 local Players = game:GetService("Players")
 local RunService = game:GetService("RunService")
 local Debris = game:GetService("Debris")
-local SoundService = game:GetService("SoundService") -- Añadido SoundService
+local CoreGui = game:GetService("CoreGui")
+
 local LocalPlayer = Players.LocalPlayer
 
--- Buscar la interfaz principal creada por el Hub para inyectar los tags ahí
-local targetParent = pcall(function() return game:GetService("CoreGui").Name end) and game:GetService("CoreGui") or LocalPlayer:WaitForChild("PlayerGui", 5)
-local ScreenGui = targetParent:WaitForChild("BloxyHub_UI", 10)
+-- Crear el GUI contenedor de los Tags
+local guiName = "BloxyTags_External_GUI"
+local targetParent = pcall(function() return CoreGui.Name end) and CoreGui or LocalPlayer:WaitForChild("PlayerGui", 5)
+
+if targetParent:FindFirstChild(guiName) then
+    targetParent[guiName]:Destroy() -- Evita duplicados si se ejecuta varias veces
+end
+
+local ScreenGui = Instance.new("ScreenGui")
+ScreenGui.Name = guiName
+ScreenGui.Parent = targetParent
+ScreenGui.ResetOnSpawn = false
 
 local friendsCache = {}
 local function isFriend(player)
@@ -18,50 +29,18 @@ local function isFriend(player)
     return false
 end
 
-local tagConnections = {}
-
-_G.cleanTags = function(animated)
-    for _, conn in pairs(tagConnections) do conn:Disconnect() end
-    tagConnections = {}
-    if not ScreenGui then return end
-    for _, child in ipairs(ScreenGui:GetChildren()) do
-        if child.Name == "BloxyTag_Dynamic" then 
-            if child.Adornee and child.Adornee.Parent then
-                local hum = child.Adornee.Parent:FindFirstChild("Humanoid")
-                if hum then hum.DisplayDistanceType = Enum.HumanoidDisplayDistanceType.Viewer end
-            end
-            if animated then
-                local btn = child:FindFirstChildOfClass("TextButton")
-                if btn then
-                    TweenService:Create(btn, TweenInfo.new(0.3, Enum.EasingStyle.Back, Enum.EasingDirection.In), {Size = UDim2.new(0, 0, 0, 0), BackgroundTransparency = 1}):Play()
-                end
-                task.delay(0.35, function() child:Destroy() end)
-            else
-                child:Destroy()
-            end
-        end
-    end
-end
-
--- Función de sonido corregida
+-- NUEVO SONIDO DE TELETRANSPORTE
 local function PlayTeleportSound()
     pcall(function()
-        local sound = Instance.new("Sound")
-        sound.SoundId = "rbxassetid://127439510287856" 
-        sound.Volume = 2
-        sound.Parent = SoundService -- Reproducimos desde SoundService en lugar de ScreenGui
-        
-        if not sound.IsLoaded then
-            sound.Loaded:Wait()
-        end
-        
+        local sound = Instance.new("Sound", ScreenGui)
+        sound.SoundId = "rbxassetid://127439510287856" -- La ID que me pediste
+        sound.Volume = 2 -- Ajustado para que suene bien y claro
         sound:Play()
-        Debris:AddItem(sound, 3) 
+        Debris:AddItem(sound, 4) 
     end)
 end
 
-_G.applyTagToPlayer = function(player)
-    if not _G.TagsEnabled then return end
+local function applyTagToPlayer(player)
     if player == LocalPlayer then return end 
 
     task.spawn(function()
@@ -69,18 +48,12 @@ _G.applyTagToPlayer = function(player)
         if not isF then return end 
         
         local function apply(character)
-            if not _G.TagsEnabled then return end
             local head = character:WaitForChild("Head", 5)
             local humanoid = character:WaitForChild("Humanoid", 5)
             if not head then return end
             
             if humanoid then
                 humanoid.DisplayDistanceType = Enum.HumanoidDisplayDistanceType.None
-            end
-            
-            if not ScreenGui then return end
-            for _, child in ipairs(ScreenGui:GetChildren()) do
-                if child.Name == "BloxyTag_Dynamic" and child.Adornee == head then child:Destroy() end
             end
 
             local Billboard = Instance.new("BillboardGui", ScreenGui)
@@ -113,15 +86,10 @@ _G.applyTagToPlayer = function(player)
             })
             InnerGradient.Rotation = 45 
 
-            local strokeCol = Color3.fromRGB(255, 255, 255) 
-            local logoBgCol = Color3.fromRGB(15, 15, 15) 
-            local logoBorderCol = Color3.fromRGB(0, 0, 0) 
-            local thickness = 1.2 
-
             local TagStroke = Instance.new("UIStroke", TagButton)
             TagStroke.ApplyStrokeMode = Enum.ApplyStrokeMode.Border 
-            TagStroke.Thickness = thickness
-            TagStroke.Color = strokeCol 
+            TagStroke.Thickness = 1.2
+            TagStroke.Color = Color3.fromRGB(255, 255, 255) 
             TagStroke.Transparency = 0.5 
 
             local OrbContainer = Instance.new("Frame", TagButton)
@@ -133,7 +101,7 @@ _G.applyTagToPlayer = function(player)
             LogoContainer.Name = "CodeLogo"
             LogoContainer.Size = UDim2.new(1, 0, 1, 0) 
             LogoContainer.Position = UDim2.new(0, 0, 0, 0)
-            LogoContainer.BackgroundColor3 = logoBgCol
+            LogoContainer.BackgroundColor3 = Color3.fromRGB(15, 15, 15) 
             LogoContainer.BackgroundTransparency = 0.15 
             LogoContainer.ZIndex = 3
             
@@ -141,8 +109,8 @@ _G.applyTagToPlayer = function(player)
             LogoCorner.CornerRadius = UDim.new(0.25, 0)
             
             local LogoStroke = Instance.new("UIStroke", LogoContainer)
-            LogoStroke.Color = logoBorderCol
-            LogoStroke.Thickness = thickness
+            LogoStroke.Color = Color3.fromRGB(0, 0, 0) 
+            LogoStroke.Thickness = 1.2 
             LogoStroke.Transparency = 1 
     
             local FriendIcon = Instance.new("ImageLabel", LogoContainer)
@@ -150,7 +118,7 @@ _G.applyTagToPlayer = function(player)
             FriendIcon.AnchorPoint = Vector2.new(0.5, 0.5)
             FriendIcon.Position = UDim2.new(0.5, 0, 0.5, 0)
             FriendIcon.BackgroundTransparency = 1
-            FriendIcon.Image = "rbxthumb://type=Asset&id=136701428260164&w=150&h=150"
+            FriendIcon.Image = "rbxthumb://type=Asset&id=76848695027869&w=150&h=150"
             FriendIcon.ZIndex = 4
 
             local ContentContainer = Instance.new("Frame", TagButton)
@@ -178,25 +146,29 @@ _G.applyTagToPlayer = function(player)
             AliasLabel.LayoutOrder = 2 
             AliasLabel.ZIndex = 3
 
+            -----------------------------------------------------
+            -- SISTEMA DE TELETRANSPORTE AL HACER CLIC
+            -----------------------------------------------------
             TagButton.MouseButton1Click:Connect(function()
                 if player == LocalPlayer then return end
                 pcall(function()
                     local lpChar = LocalPlayer.Character
                     local targetChar = player.Character
                     if lpChar and lpChar:FindFirstChild("HumanoidRootPart") and targetChar and targetChar:FindFirstChild("HumanoidRootPart") then
-                        PlayTeleportSound() 
+                        PlayTeleportSound() -- Aquí suena tu nueva ID
                         local targetHRP = targetChar.HumanoidRootPart
                         local newCFrame = targetHRP.CFrame * CFrame.new(4, 0, 0) 
                         lpChar.HumanoidRootPart.CFrame = newCFrame
                     end
                 end)
             end)
+            -----------------------------------------------------
 
             local isExpanded = false
             local orbTimer = 0
             local displayAliasText = player.DisplayName
             
-            local conn = RunService.RenderStepped:Connect(function(dt)
+            RunService.RenderStepped:Connect(function(dt)
                 if not Billboard or not Billboard.Parent then return end
 
                 orbTimer = orbTimer + dt
@@ -251,11 +223,9 @@ _G.applyTagToPlayer = function(player)
                     end
                 end
             end)
-            table.insert(tagConnections, conn)
 
             task.spawn(function()
                 while Billboard and Billboard.Parent do
-                    if not _G.TagsEnabled then break end
                     if isExpanded then
                         for i = 1, #displayAliasText do
                             if not Billboard or not Billboard.Parent or not isExpanded then break end
@@ -289,54 +259,47 @@ _G.applyTagToPlayer = function(player)
     end)
 end
 
+-- Aplicar a jugadores actuales
+for _, player in ipairs(Players:GetPlayers()) do
+    applyTagToPlayer(player)
+end
+
+-- Aplicar a jugadores que se unan
 Players.PlayerAdded:Connect(function(player)
-    if _G.TagsEnabled then _G.applyTagToPlayer(player) end
+    applyTagToPlayer(player)
 end)
 
+-- Bucle de comprobación de amigos (por si aceptas uno en plena partida)
 task.spawn(function()
     while task.wait(2.5) do
-        if _G.TagsEnabled then
-            for _, player in ipairs(Players:GetPlayers()) do
-                if player == LocalPlayer then continue end 
-                
-                local isF = false
-                local wasFriend = friendsCache[player.UserId]
-                local isNowFriend = false
-                pcall(function() isNowFriend = LocalPlayer:IsFriendsWith(player.UserId) end)
-                if isNowFriend and not wasFriend then
-                    friendsCache[player.UserId] = true
-                    isF = true
-                    task.spawn(function()
-                        task.wait(1)
-                        _G.applyTagToPlayer(player)
-                    end)
-                else
-                    friendsCache[player.UserId] = isNowFriend
-                    isF = isNowFriend
-                end
-                
-                if isF then 
-                    if player.Character and player.Character:FindFirstChild("Head") then
-                        local hasTag = false
-                        if ScreenGui then
-                            for _, child in ipairs(ScreenGui:GetChildren()) do
-                                if child.Name == "BloxyTag_Dynamic" and child.Adornee == player.Character.Head then hasTag = true end
-                            end
-                        end
-                        if not hasTag then _G.applyTagToPlayer(player) end
+        if not ScreenGui or not ScreenGui.Parent then break end
+        for _, player in ipairs(Players:GetPlayers()) do
+            if player == LocalPlayer then continue end 
+            
+            local isF = false
+            local wasFriend = friendsCache[player.UserId]
+            local isNowFriend = false
+            pcall(function() isNowFriend = LocalPlayer:IsFriendsWith(player.UserId) end)
+            
+            if isNowFriend and not wasFriend then
+                friendsCache[player.UserId] = true
+                isF = true
+                task.spawn(function()
+                    task.wait(1)
+                    applyTagToPlayer(player)
+                end)
+            else
+                friendsCache[player.UserId] = isNowFriend
+                isF = isNowFriend
+            end
+            
+            if isF then 
+                if player.Character and player.Character:FindFirstChild("Head") then
+                    local hasTag = false
+                    for _, child in ipairs(ScreenGui:GetChildren()) do
+                        if child.Name == "BloxyTag_Dynamic" and child.Adornee == player.Character.Head then hasTag = true end
                     end
-                else
-                    if player.Character and player.Character:FindFirstChild("Head") then
-                        if ScreenGui then
-                            for _, child in ipairs(ScreenGui:GetChildren()) do
-                                if child.Name == "BloxyTag_Dynamic" and child.Adornee == player.Character.Head then
-                                    local hum = player.Character:FindFirstChild("Humanoid")
-                                    if hum then hum.DisplayDistanceType = Enum.HumanoidDisplayDistanceType.Viewer end
-                                    child:Destroy()
-                                end
-                            end
-                        end
-                    end
+                    if not hasTag then applyTagToPlayer(player) end
                 end
             end
         end
