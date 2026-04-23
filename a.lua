@@ -46,10 +46,10 @@ local function PlayTeleportSound()
     pcall(function()
         if not ScreenGui then return end
         local sound = Instance.new("Sound", ScreenGui)
-        sound.SoundId = "rbxassetid://136701428260164" 
-        sound.Volume = 3
+        sound.SoundId = "rbxassetid://127439510287856" 
+        sound.Volume = 2
         sound:Play()
-        Debris:AddItem(sound, 3) 
+        Debris:AddItem(sound, 2) 
     end)
 end
 
