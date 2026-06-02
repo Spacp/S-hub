@@ -1,0 +1,335 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title> Space hub · Scripts </title>
+    <link rel="icon" type="image/png" href="white-flower.png?v=2" />
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet" />
+    <style>
+        @font-face {
+            font-family: 'Demonized';
+            src: url('Demonized.ttf') format('truetype');
+        }
+
+        *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+        body { font-family: 'Inter', system-ui, sans-serif; overflow: hidden; background: #000; min-height: 100vh; display: flex; align-items: center; justify-content: center; }
+        
+        #welcome-overlay { position: fixed; inset: 0; background: #050505; z-index: 9999; display: flex; flex-direction: column; align-items: center; justify-content: center; transition: opacity .6s cubic-bezier(.25,1,.5,1), visibility .6s; cursor: pointer; }
+        #welcome-overlay.fade-out { opacity: 0; visibility: hidden; pointer-events: none; }
+        #welcome-rose { width: 90px; opacity: .5; margin-bottom: 30px; animation: pulseRose 2.5s ease-in-out infinite; filter: drop-shadow(0 0 15px rgba(255,255,255,.1)); }
+        #welcome-btn { background: rgba(255,255,255,.05); border: 1px solid rgba(255,255,255,.15); color: #fff; padding: 16px 44px; border-radius: 99px; font-size: 13px; font-weight: 700; letter-spacing: .15em; text-transform: uppercase; backdrop-filter: blur(10px); -webkit-backdrop-filter: blur(10px); box-shadow: 0 10px 30px rgba(0,0,0,.5); transition: all .3s ease; }
+        #welcome-overlay:hover #welcome-btn { background: rgba(255,255,255,.1); border-color: rgba(255,255,255,.3); transform: translateY(-2px); box-shadow: 0 15px 35px rgba(0,0,0,.7); }
+        
+        #space-canvas { position: fixed; inset: 0; width: 100%; height: 100%; pointer-events: none; z-index: 0; }
+        .shooting-star { position: fixed; width: 2px; height: 2px; border-radius: 50%; background: #fff; opacity: 0; pointer-events: none; z-index: 1; }
+        .shooting-star:nth-child(1) { top: 12%; left: 8%; animation: shoot 6s linear 0s infinite; }
+        .shooting-star:nth-child(2) { top: 38%; left: 4%; animation: shoot 8s linear 2.5s infinite; }
+        .shooting-star:nth-child(3) { top: 62%; left: 18%; animation: shoot 5s linear 4s infinite; }
+        .shooting-star:nth-child(4) { top: 7%; left: 52%; animation: shoot 7s linear 1s infinite; }
+        .shooting-star:nth-child(5) { top: 48%; left: 72%; animation: shoot 9s linear 3.5s infinite; }
+        
+        .rose-corner { position: fixed; width: 220px; opacity: .07; pointer-events: none; z-index: 2; }
+        .rose-tl { top: -40px; right: -40px; transform: rotate(15deg); }
+        .rose-br { bottom: -40px; left: -40px; transform: rotate(200deg); }
+        
+        #center { position: relative; z-index: 10; min-height: 100vh; display: flex; flex-direction: column; align-items: center; justify-content: center; padding: 24px; }
+        #card-wrap { animation: float 7s ease-in-out infinite, fadeInUp .85s cubic-bezier(.16,1,.3,1) both; perspective: 1200px; width: min(92vw,400px); position: relative; }
+        
+        #card { border-radius: 24px; background: rgba(255,255,255,.07); backdrop-filter: blur(40px) saturate(180%); -webkit-backdrop-filter: blur(40px) saturate(180%); border: 1px solid rgba(255,255,255,.15); box-shadow: 0 24px 60px rgba(0,0,0,.6), inset 0 1px 1px rgba(255,255,255,.15); padding: 44px 38px 40px; display: flex; flex-direction: column; align-items: center; overflow: hidden; position: relative; transform-style: preserve-3d; will-change: transform, height; transition: transform .4s cubic-bezier(.03,.98,.52,.99), box-shadow .4s ease; }
+        #card::before { content: ''; position: absolute; top: 0; left: 15%; right: 15%; height: 1px; background: linear-gradient(90deg, transparent, rgba(255,255,255,.4), transparent); border-radius: 999px; pointer-events: none; }
+        
+        .card-rose { position: absolute; width: 120px; opacity: .15; pointer-events: none; }
+        .card-rose-tl { top: -18px; left: -22px; transform: rotate(-20deg); }
+        .card-rose-br { bottom: -18px; right: -22px; transform: rotate(160deg); }
+        
+        .content-section { width: 100%; display: flex; flex-direction: column; align-items: center; transition: opacity 0.4s cubic-bezier(0.25, 1, 0.5, 1), transform 0.4s cubic-bezier(0.25, 1, 0.5, 1); }
+        
+        #username-text { font-family: 'Demonized', 'Inter', sans-serif; color: #ffffff; font-size: 26px; font-weight: 500; margin-bottom: 12px; letter-spacing: .05em; text-shadow: 0 0 10px rgba(255,255,255,0.3); position: relative; z-index: 1; text-align: center; }
+        #title-row { display: flex; align-items: center; gap: 8px; margin-bottom: 8px; position: relative; z-index: 1; }
+        #title-row h1 { color: #fff; font-size: 16px; font-weight: 600; letter-spacing: .05em; line-height: 1.2; text-transform: uppercase; color: rgba(255,255,255,0.7); }
+        #subtitle { color: rgba(156,163,175,.85); font-size: 13px; text-align: center; margin-bottom: 30px; line-height: 1.6; max-width: 270px; position: relative; z-index: 1; }
+        #center-rose { width: 64px; opacity: .4; margin-bottom: 24px; filter: drop-shadow(0 4px 12px rgba(255,255,255,.15)); position: relative; z-index: 1; }
+        #divider { width: 100%; height: 1px; background: linear-gradient(90deg, transparent, rgba(255,255,255,.2), transparent); margin-bottom: 26px; position: relative; z-index: 1; }
+        
+        #go-btn, #back-btn { display: flex; align-items: center; justify-content: center; gap: 9px; width: 100%; padding: 14px 22px; border-radius: 14px; background: rgba(255,255,255,.1); color: #fff; font-size: 14px; font-weight: 700; text-decoration: none; border: 1px solid rgba(255,255,255,.2); box-shadow: 0 8px 24px rgba(0,0,0,.3), inset 0 1px 0 rgba(255,255,255,.2); transition: all .3s cubic-bezier(.25,.8,.25,1); letter-spacing: .02em; cursor: pointer; position: relative; z-index: 1; backdrop-filter: blur(10px); }
+        #go-btn:hover, #back-btn:hover { transform: translateY(-3px); background: rgba(255,255,255,.15); box-shadow: 0 12px 32px rgba(0,0,0,.5), inset 0 1px 0 rgba(255,255,255,.3); border-color: rgba(255,255,255,.3); }
+        
+        #sparkle-row { display: flex; align-items: center; gap: 6px; margin-top: 20px; opacity: .5; position: relative; z-index: 1; }
+        #sparkle-row span { color: #d1d5db; font-size: 11px; letter-spacing: .08em; }
+
+        .script-box { width: 100%; background: rgba(0, 0, 0, 0.25); border: 1px solid rgba(255, 255, 255, 0.15); border-radius: 12px; overflow: hidden; margin-bottom: 20px; box-shadow: inset 0 2px 10px rgba(0,0,0,0.5); }
+        .script-header { display: flex; justify-content: space-between; align-items: center; padding: 10px 16px; background: rgba(255, 255, 255, 0.05); border-bottom: 1px solid rgba(255, 255, 255, 0.1); backdrop-filter: blur(5px); }
+        .script-header span { color: #9ca3af; font-size: 12px; font-weight: 600; font-family: 'Inter', monospace; letter-spacing: 0.05em; }
+        
+        #copy-btn { background: transparent; border: none; color: #d1d5db; cursor: pointer; display: flex; align-items: center; justify-content: center; transition: color 0.2s ease, transform 0.2s ease; padding: 4px; border-radius: 6px; }
+        #copy-btn:hover { color: #fff; transform: scale(1.1); background: rgba(255,255,255,0.1); }
+        #copy-btn svg { width: 18px; height: 18px; }
+        
+        .script-content-wrapper { padding: 16px; max-height: 180px; overflow-y: auto; text-align: left; scrollbar-width: thin; scrollbar-color: rgba(255,255,255,0.3) transparent; }
+        .script-content-wrapper::-webkit-scrollbar { width: 6px; }
+        .script-content-wrapper::-webkit-scrollbar-thumb { background: rgba(255,255,255,0.2); border-radius: 10px; }
+        #script-code { color: #e5e7eb; font-family: 'Courier New', Courier, monospace; font-size: 11px; white-space: pre-wrap; word-break: break-all; line-height: 1.4; }
+        
+        .svg-hidden { display: none !important; }
+        
+        #footer { position: fixed; bottom: 16px; color: rgba(107,114,128,.5); font-size: 11px; letter-spacing: .08em; text-align: center; z-index: 10; }
+        
+        @keyframes spin { from { transform: rotate(0deg); } to { transform: rotate(360deg); } }
+        @keyframes float { 0%, 100% { transform: translateY(0); } 50% { transform: translateY(-12px); } }
+        @keyframes shoot { 0% { transform: translateX(0) translateY(0) scale(1); opacity: 0; } 5% { opacity: 1; } 95% { opacity: .8; } 100% { transform: translateX(700px) translateY(300px) scale(.5); opacity: 0; } }
+        @keyframes fadeInUp { from { opacity: 0; transform: translateY(40px) scale(.95); } to { opacity: 1; transform: translateY(0) scale(1); } }
+        @keyframes pulseRose { 0%, 100% { transform: scale(1); opacity: .3; } 50% { transform: scale(1.06); opacity: .65; } }
+    </style>
+</head>
+<body>
+
+    <div id="welcome-overlay">
+        <img id="welcome-rose" src="white-flower.png" alt="Welcome Rose" />
+        <button id="welcome-btn">Enter Space</button>
+    </div>
+
+    <canvas id="space-canvas"></canvas>
+    <div class="shooting-star"></div>
+    <div class="shooting-star"></div>
+    <div class="shooting-star"></div>
+    <div class="shooting-star"></div>
+    <div class="shooting-star"></div>
+
+    <img class="rose-corner rose-tl" src="white-flower.png" alt="" />
+    <img class="rose-corner rose-br" src="white-flower.png" alt="" />
+
+    <div id="center">
+        <div id="card-wrap">
+            <div id="card">
+                <img class="card-rose card-rose-tl" src="white-flower.png" alt="" />
+                <img class="card-rose card-rose-br" src="white-flower.png" alt="" />
+                
+                <div id="step-1" class="content-section">
+                    <h2 id="username-text">Space hub</h2>
+                    
+                    <img id="center-rose" src="white-flower.png" alt="Rosa" />
+                    
+                    <div id="divider"></div>
+                    
+                    <button id="go-btn">
+                        <svg xmlns="http://www.w3.org/2000/svg" width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 15v4c0 1.1.9 2 2 2h14a2 2 0 0 0 2-2v-4"/><polyline points="17 9 12 14 7 9"/><line x1="12" y1="14" x2="12" y2="3"/></svg>
+                        Obtener Script Hub
+                    </button>
+                    
+                    <div id="sparkle-row">
+                        <svg xmlns="http://www.w3.org/2000/svg" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="#d1d5db" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m12 3-1.912 5.813a2 2 0 0 1-1.275 1.275L3 12l5.813 1.912a2 2 0 0 1 1.275 1.275L12 21l1.912-5.813a2 2 0 0 1 1.275-1.275L21 12l-5.813-1.912a2 2 0 0 1-1.275-1.275L12 3Z" /></svg>
+                        <span>FAST · UNDETECTED · PRIVATE</span>
+                        <svg xmlns="http://www.w3.org/2000/svg" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="#d1d5db" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m12 3-1.912 5.813a2 2 0 0 1-1.275 1.275L3 12l5.813 1.912a2 2 0 0 1 1.275 1.275L12 21l1.912-5.813a2 2 0 0 1 1.275-1.275L21 12l-5.813-1.912a2 2 0 0 1-1.275-1.275L12 3Z" /></svg>
+                    </div>
+                </div>
+
+                <div id="step-2" class="content-section" style="display: none; opacity: 0; transform: scale(0.95);">
+                    <div class="script-box">
+                        <div class="script-header">
+                            <span>loadstring.lua</span>
+                            <button id="copy-btn" title="Copiar código">
+                                <svg id="icon-copy" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="9" y="9" width="13" height="13" rx="2" ry="2"></rect><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"></path></svg>
+                                <svg id="icon-check" class="svg-hidden" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="#10b981" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"></polyline></svg>
+                            </button>
+                        </div>
+                        <div class="script-content-wrapper">
+                            <pre><code id="script-code">loadstring(game:HttpGet("https://spacp.github.io/S-hub/Bloxy%20-%20Hub.lua"))()</code></pre>
+                        </div>
+                    </div>
+                    
+                    <button id="back-btn">
+                        <svg xmlns="http://www.w3.org/2000/svg" width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="19" y1="12" x2="5" y2="12"></line><polyline points="12 19 5 12 12 5"></polyline></svg>
+                        Volver al inicio
+                    </button>
+                </div>
+
+            </div>
+        </div>
+        <p id="footer">SPACE HUB · OFFICIAL LANDING</p>
+    </div>
+
+    <script>
+        // --- CONTROL DE BIENVENIDA ---
+        (function() {
+            const f = document.getElementById("welcome-overlay");
+            f.addEventListener("click", () => {
+                f.classList.add("fade-out");
+            });
+        })();
+
+        // --- EFECTO DE FONDO ESPACIAL (ESTRELLAS FIJAS) ---
+        (function() {
+            function u() {
+                n.width = window.innerWidth;
+                n.height = window.innerHeight;
+            }
+            function f() {
+                t.clearRect(0, 0, n.width, n.height);
+                const i = t.createLinearGradient(0, 0, n.width * .6, n.height);
+                i.addColorStop(0, "#000000");
+                i.addColorStop(.5, "#0a0a0a");
+                i.addColorStop(1, "#111111");
+                t.fillStyle = i;
+                t.fillRect(0, 0, n.width, n.height);
+                
+                [{x: n.width * .15, y: n.height * .2, r: 280, c: "rgba(100,100,110,0.05)"}, 
+                 {x: n.width * .82, y: n.height * .6, r: 220, c: "rgba(80,80,90,0.04)"}, 
+                 {x: n.width * .5, y: n.height * .85, r: 190, c: "rgba(60,60,70,0.035)"}].forEach(n => {
+                    const i = t.createRadialGradient(n.x, n.y, 0, n.x, n.y, n.r);
+                    i.addColorStop(0, n.c);
+                    i.addColorStop(1, "transparent");
+                    t.fillStyle = i;
+                    t.beginPath();
+                    t.arc(n.x, n.y, n.r, 0, Math.PI * 2);
+                    t.fill();
+                });
+                
+                r.forEach(i => {
+                    t.globalAlpha = i.alpha;
+                    t.fillStyle = i.color;
+                    t.beginPath();
+                    t.arc(i.x, i.y, i.r, 0, Math.PI * 2);
+                    t.fill();
+                    i.x += i.dx;
+                    i.y += i.dy;
+                    i.x < 0 && (i.x = n.width);
+                    i.x > n.width && (i.x = 0);
+                    i.y < 0 && (i.y = n.height);
+                    i.y > n.height && (i.y = 0);
+                });
+                
+                t.globalAlpha = 1;
+                requestAnimationFrame(f);
+            }
+            
+            const n = document.getElementById("space-canvas"),
+                  t = n.getContext("2d"),
+                  i = ["#ffffff", "#d1d5db", "#9ca3af", "#6b7280", "#4b5563", "#e5e7eb"],
+                  r = [];
+                  
+            u();
+            window.addEventListener("resize", u);
+            
+            for (let t = 0; t < 200; t++) {
+                r.push({
+                    x: Math.random() * n.width,
+                    y: Math.random() * n.height,
+                    r: Math.random() * 1.6 + .2,
+                    dx: (Math.random() - .5) * .12,
+                    dy: (Math.random() - .5) * .12,
+                    alpha: Math.random() * .6 + .2,
+                    color: i[Math.floor(Math.random() * i.length)]
+                });
+            }
+            f();
+        })();
+
+        // --- EFECTO PARALLAX 3D EN LA TARJETA ---
+        (function() {
+            const t = document.getElementById("card-wrap"),
+                  n = document.getElementById("card"),
+                  r = 12;
+            let i;
+            
+            t.addEventListener("mousemove", u => {
+                if(n.style.height && n.style.height !== 'auto') return;
+                
+                const f = t.getBoundingClientRect(),
+                      e = f.left + f.width / 2,
+                      o = f.top + f.height / 2,
+                      s = -(u.clientY - o) / (f.height / 2) * r,
+                      h = (u.clientX - e) / (f.width / 2) * r;
+                      
+                cancelAnimationFrame(i);
+                i = requestAnimationFrame(() => {
+                    n.style.transform = `rotateX(${s}deg) rotateY(${h}deg) scale(1.03)`;
+                    n.style.transition = "transform 0.1s ease-out, box-shadow 0.2s ease";
+                    n.style.boxShadow = "0 32px 80px rgba(0,0,0,0.8), inset 0 1px 1px rgba(255,255,255,0.2)";
+                });
+            });
+            
+            t.addEventListener("mouseleave", () => {
+                cancelAnimationFrame(i);
+                n.style.transform = "rotateX(0deg) rotateY(0deg) scale(1)";
+                n.style.transition = "transform 0.5s cubic-bezier(.03,.98,.52,.99), box-shadow 0.5s ease";
+                n.style.boxShadow = "0 24px 60px rgba(0,0,0,0.6), inset 0 1px 1px rgba(255,255,255,0.15)";
+            });
+        })();
+
+        // --- LÓGICA DE TRANSICIONES MORPH Y BOTÓN DE COPIAR ---
+        (function() {
+            const btnGo = document.getElementById('go-btn');
+            const btnBack = document.getElementById('back-btn');
+            const step1 = document.getElementById('step-1');
+            const step2 = document.getElementById('step-2');
+            const card = document.getElementById('card');
+            
+            const btnCopy = document.getElementById('copy-btn');
+            const iconCopy = document.getElementById('icon-copy');
+            const iconCheck = document.getElementById('icon-check');
+            const scriptCode = document.getElementById('script-code');
+
+            function switchView(hideEl, showEl) {
+                const initialHeight = card.offsetHeight;
+                card.style.height = initialHeight + 'px';
+                
+                hideEl.style.opacity = '0';
+                hideEl.style.transform = 'scale(0.95)';
+                
+                setTimeout(() => {
+                    hideEl.style.display = 'none';
+                    showEl.style.display = 'flex';
+                    
+                    card.style.height = 'auto';
+                    const targetHeight = card.offsetHeight;
+                    
+                    card.style.height = initialHeight + 'px';
+                    
+                    void card.offsetHeight;
+                    
+                    card.style.transition = 'height 0.4s cubic-bezier(0.25, 1, 0.5, 1), transform 0.4s cubic-bezier(.03,.98,.52,.99), box-shadow 0.4s ease';
+                    card.style.height = targetHeight + 'px';
+                    
+                    showEl.style.opacity = '1';
+                    showEl.style.transform = 'scale(1)';
+                    
+                    setTimeout(() => {
+                        card.style.height = 'auto';
+                        card.style.transition = 'transform .4s cubic-bezier(.03,.98,.52,.99), box-shadow .4s ease';
+                    }, 400);
+
+                }, 400);
+            }
+
+            btnGo.addEventListener('click', (e) => {
+                e.preventDefault();
+                switchView(step1, step2);
+            });
+
+            btnBack.addEventListener('click', (e) => {
+                e.preventDefault();
+                switchView(step2, step1);
+            });
+
+            btnCopy.addEventListener('click', () => {
+                const textToCopy = scriptCode.textContent;
+                
+                navigator.clipboard.writeText(textToCopy).then(() => {
+                    iconCopy.classList.add('svg-hidden');
+                    iconCheck.classList.remove('svg-hidden');
+                    
+                    setTimeout(() => {
+                        iconCheck.classList.add('svg-hidden');
+                        iconCopy.classList.remove('svg-hidden');
+                    }, 2000);
+                }).catch(err => {
+                    console.error('Error al copiar el texto: ', err);
+                });
+            });
+        })();
+    </script>
+</body>
+</html>
