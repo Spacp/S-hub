@@ -29,7 +29,6 @@ local firebaseCache = {}
 
 local req = request or http_request or syn.request or fluxus.request
 
--- 1. Enviarnos a Firebase
 if req then
     pcall(function()
         local payload = {}
@@ -43,16 +42,14 @@ if req then
     end)
 end
 
--- 2. Borrarnos al salir
 local function borrar()
     if req then
         pcall(function() req({Url = "https://space-tagsp-default-rtdb.firebaseio.com/Activos/"..tostring(LocalPlayer.UserId)..".json", Method = "DELETE"}) end)
     end
 end
-game:BindToClose(borrar)
+pcall(function() game:BindToClose(borrar) end)
 Players.PlayerRemoving:Connect(function(p) if p == LocalPlayer then borrar() end end)
 
--- 3. Bucle para descargar Firebase en segundo plano
 task.spawn(function()
     while task.wait(2) do
         pcall(function()
@@ -66,8 +63,6 @@ task.spawn(function()
     end
 end)
 
-local friendsCache = {}
--- ENGAÑAMOS AL SCRIPT: Ahora "Amigo" significa "Estar en Firebase"
 local function isFriend(player)
     local idStr = tostring(player.UserId)
     if firebaseCache[idStr] then return true end
@@ -75,7 +70,6 @@ local function isFriend(player)
 end
 -- ========================================================
 
--- NUEVO SONIDO DE TELETRANSPORTE
 local function PlayTeleportSound()
     pcall(function()
         local sound = Instance.new("Sound")
@@ -87,281 +81,266 @@ local function PlayTeleportSound()
     end)
 end
 
-local function applyTagToPlayer(player)
-    -- ¡ELIMINADO el bloqueo para que TÚ PUEDAS VERTE TU TAG!
-
-    task.spawn(function()
-        -- En vez de esperar, comprobamos directamente
-        local function apply(character)
-            local isF = isFriend(player)
-            if not isF then return end 
-            
-            local head = character:WaitForChild("Head", 5)
-            local humanoid = character:WaitForChild("Humanoid", 5)
-            if not head then return end
-            
-            if humanoid then
-                humanoid.DisplayDistanceType = Enum.HumanoidDisplayDistanceType.None
-            end
-
-            local Billboard = Instance.new("BillboardGui", ScreenGui)
-            Billboard.Name = "BloxyTag_Dynamic"
-            Billboard.Adornee = head
-            Billboard.Size = UDim2.new(0, 300, 0, 40)
-            Billboard.StudsOffset = Vector3.new(0, 1.5, 0)
-            Billboard.AlwaysOnTop = true
-            Billboard.MaxDistance = math.huge 
-            Billboard.Active = true
-            
-            local TagButton = Instance.new("TextButton", Billboard)
-            TagButton.Text = ""
-            TagButton.AnchorPoint = Vector2.new(0.5, 0.5)
-            TagButton.Position = UDim2.new(0.5, 0, 0.5, 0)
-            TagButton.Size = UDim2.new(0, 40, 0, 40) 
-            TagButton.BackgroundColor3 = Color3.fromRGB(255, 255, 255) 
-            TagButton.BackgroundTransparency = 0.65 
-            TagButton.BorderSizePixel = 0
-            TagButton.ClipsDescendants = true 
-            TagButton.Active = true
-            TagButton.AutoButtonColor = false
-
-            Instance.new("UICorner", TagButton).CornerRadius = UDim.new(0, 10)
-
-            local InnerGradient = Instance.new("UIGradient", TagButton)
-            InnerGradient.Color = ColorSequence.new({
-                ColorSequenceKeypoint.new(0, Color3.fromRGB(255, 255, 255)),
-                ColorSequenceKeypoint.new(1, Color3.fromRGB(180, 180, 180))
-            })
-            InnerGradient.Rotation = 45 
-
-            local TagStroke = Instance.new("UIStroke", TagButton)
-            TagStroke.ApplyStrokeMode = Enum.ApplyStrokeMode.Border 
-            TagStroke.Thickness = 1.2
-            TagStroke.Color = Color3.fromRGB(255, 255, 255) 
-            TagStroke.Transparency = 0.5 
-
-            local OrbContainer = Instance.new("Frame", TagButton)
-            OrbContainer.Size = UDim2.new(1, 0, 1, 0)
-            OrbContainer.BackgroundTransparency = 1
-            OrbContainer.ZIndex = 1
-            OrbContainer.Active = false 
-
-            local LogoContainer = Instance.new("Frame", TagButton)
-            LogoContainer.Name = "CodeLogo"
-            LogoContainer.Size = UDim2.new(1, 0, 1, 0) 
-            LogoContainer.Position = UDim2.new(0, 0, 0, 0)
-            LogoContainer.BackgroundColor3 = Color3.fromRGB(15, 15, 15) 
-            LogoContainer.BackgroundTransparency = 0.15 
-            LogoContainer.ZIndex = 3
-            LogoContainer.Active = false 
-            
-            local LogoCorner = Instance.new("UICorner", LogoContainer)
-            LogoCorner.CornerRadius = UDim.new(0.25, 0)
-            
-            local LogoStroke = Instance.new("UIStroke", LogoContainer)
-            LogoStroke.Color = Color3.fromRGB(0, 0, 0) 
-            LogoStroke.Thickness = 1.2 
-            LogoStroke.Transparency = 1 
+-- ========================================================
+-- FUNCIÓN VISUAL AISLADA (Para evitar clones)
+-- ========================================================
+local function createVisualTag(player, character)
+    local head = character:WaitForChild("Head", 5)
+    local humanoid = character:WaitForChild("Humanoid", 5)
+    if not head then return end
     
-            local FriendIcon = Instance.new("ImageLabel", LogoContainer)
-            FriendIcon.Size = UDim2.new(0.7, 0, 0.7, 0)
-            FriendIcon.AnchorPoint = Vector2.new(0.5, 0.5)
-            FriendIcon.Position = UDim2.new(0.5, 0, 0.5, 0)
-            FriendIcon.BackgroundTransparency = 1
-            FriendIcon.Image = "rbxthumb://type=Asset&id=136701428260164&w=150&h=150"
-            FriendIcon.ZIndex = 4
+    -- 🔒 CANDADO ANTI-CLONES: Si ya tiene tag, cancelamos
+    for _, child in ipairs(ScreenGui:GetChildren()) do
+        if child.Name == "BloxyTag_Dynamic" and child.Adornee == head then return end
+    end
 
-            local ContentContainer = Instance.new("Frame", TagButton)
-            ContentContainer.Name = "Content"
-            ContentContainer.Size = UDim2.new(1, -40, 1, 0)
-            ContentContainer.Position = UDim2.new(0, 42, 0, 0)
-            ContentContainer.BackgroundTransparency = 1
-            ContentContainer.ZIndex = 2
-            ContentContainer.Active = false
+    if humanoid then
+        humanoid.DisplayDistanceType = Enum.HumanoidDisplayDistanceType.None
+    end
 
-            local ContentLayout = Instance.new("UIListLayout", ContentContainer)
-            ContentLayout.FillDirection = Enum.FillDirection.Horizontal
-            ContentLayout.HorizontalAlignment = Enum.HorizontalAlignment.Left 
-            ContentLayout.VerticalAlignment = Enum.VerticalAlignment.Center
-            ContentLayout.SortOrder = Enum.SortOrder.LayoutOrder 
-            ContentLayout.Padding = UDim.new(0, 6) 
+    local Billboard = Instance.new("BillboardGui", ScreenGui)
+    Billboard.Name = "BloxyTag_Dynamic"
+    Billboard.Adornee = head
+    Billboard.Size = UDim2.new(0, 300, 0, 40)
+    Billboard.StudsOffset = Vector3.new(0, 1.5, 0)
+    Billboard.AlwaysOnTop = true
+    Billboard.MaxDistance = math.huge 
+    Billboard.Active = true
+    
+    local TagButton = Instance.new("TextButton", Billboard)
+    TagButton.Text = ""
+    TagButton.AnchorPoint = Vector2.new(0.5, 0.5)
+    TagButton.Position = UDim2.new(0.5, 0, 0.5, 0)
+    TagButton.Size = UDim2.new(0, 40, 0, 40) 
+    TagButton.BackgroundColor3 = Color3.fromRGB(255, 255, 255) 
+    TagButton.BackgroundTransparency = 0.65 
+    TagButton.BorderSizePixel = 0
+    TagButton.ClipsDescendants = true 
+    TagButton.Active = true
+    TagButton.AutoButtonColor = false
 
-            local AliasLabel = Instance.new("TextLabel", ContentContainer)
-            AliasLabel.BackgroundTransparency = 1
-            AliasLabel.Size = UDim2.new(0, 0, 1, 0)
-            AliasLabel.Text = ""
-            AliasLabel.TextColor3 = Color3.fromRGB(15, 15, 15) 
-            AliasLabel.Font = Enum.Font.GothamBlack
-            AliasLabel.TextSize = 14 
-            AliasLabel.TextXAlignment = Enum.TextXAlignment.Left
-            AliasLabel.LayoutOrder = 2 
-            AliasLabel.ZIndex = 3
+    Instance.new("UICorner", TagButton).CornerRadius = UDim.new(0, 10)
 
-            -----------------------------------------------------
-            -- SISTEMA DE TELETRANSPORTE AL HACER CLIC
-            -----------------------------------------------------
-            TagButton.Activated:Connect(function()
-                if player == LocalPlayer then return end
-                pcall(function()
-                    local lpChar = LocalPlayer.Character
-                    local targetChar = player.Character
-                    
-                    if lpChar and lpChar:FindFirstChild("HumanoidRootPart") and targetChar and targetChar:FindFirstChild("HumanoidRootPart") then
-                        PlayTeleportSound() 
-                        
-                        local targetHRP = targetChar.HumanoidRootPart
-                        local newCFrame = targetHRP.CFrame * CFrame.new(4, 0, 2) 
-                        
-                        lpChar:PivotTo(newCFrame)
-                    end
-                end)
-            end)
-            -----------------------------------------------------
+    local InnerGradient = Instance.new("UIGradient", TagButton)
+    InnerGradient.Color = ColorSequence.new({
+        ColorSequenceKeypoint.new(0, Color3.fromRGB(255, 255, 255)),
+        ColorSequenceKeypoint.new(1, Color3.fromRGB(180, 180, 180))
+    })
+    InnerGradient.Rotation = 45 
 
-            local isExpanded = false
-            local orbTimer = 0
-            local displayAliasText = player.DisplayName
-            
-            RunService.RenderStepped:Connect(function(dt)
-                if not Billboard or not Billboard.Parent then return end
+    local TagStroke = Instance.new("UIStroke", TagButton)
+    TagStroke.ApplyStrokeMode = Enum.ApplyStrokeMode.Border 
+    TagStroke.Thickness = 1.2
+    TagStroke.Color = Color3.fromRGB(255, 255, 255) 
+    TagStroke.Transparency = 0.5 
 
-                orbTimer = orbTimer + dt
-                if orbTimer >= 0.15 then
-                    orbTimer = 0
-                    pcall(function()
-                        local orb = Instance.new("Frame")
-                        local size = math.random(2, 5)
-                        orb.Size = UDim2.new(0, size, 0, size)
-                        orb.Position = UDim2.new(math.random(10, 90)/100, 0, 1.2, 0)
-                        orb.BackgroundColor3 = Color3.fromRGB(255, 255, 255)
-                        orb.BackgroundTransparency = 0.4
-                        orb.BorderSizePixel = 0
-                        orb.ZIndex = 1
-                        orb.Active = false 
-                        Instance.new("UICorner", orb).CornerRadius = UDim.new(1, 0)
-                        orb.Parent = OrbContainer
+    local OrbContainer = Instance.new("Frame", TagButton)
+    OrbContainer.Size = UDim2.new(1, 0, 1, 0)
+    OrbContainer.BackgroundTransparency = 1
+    OrbContainer.ZIndex = 1
+    OrbContainer.Active = false 
 
-                        local tween = TweenService:Create(orb, TweenInfo.new(math.random(15, 30)/10, Enum.EasingStyle.Sine, Enum.EasingDirection.Out), {
-                            Position = UDim2.new(orb.Position.X.Scale, 0, -0.2, 0),
-                            BackgroundTransparency = 1
-                        })
-                        tween:Play()
-                        tween.Completed:Connect(function() orb:Destroy() end)
-                    end)
-                end
+    local LogoContainer = Instance.new("Frame", TagButton)
+    LogoContainer.Name = "CodeLogo"
+    LogoContainer.Size = UDim2.new(1, 0, 1, 0) 
+    LogoContainer.Position = UDim2.new(0, 0, 0, 0)
+    LogoContainer.BackgroundColor3 = Color3.fromRGB(15, 15, 15) 
+    LogoContainer.BackgroundTransparency = 0.15 
+    LogoContainer.ZIndex = 3
+    LogoContainer.Active = false 
+    
+    local LogoCorner = Instance.new("UICorner", LogoContainer)
+    LogoCorner.CornerRadius = UDim.new(0.25, 0)
+    
+    local LogoStroke = Instance.new("UIStroke", LogoContainer)
+    LogoStroke.Color = Color3.fromRGB(0, 0, 0) 
+    LogoStroke.Thickness = 1.2 
+    LogoStroke.Transparency = 1 
 
-                local distance = 9999
-                local lpChar = LocalPlayer.Character
-                if lpChar and lpChar:FindFirstChild("Head") then
-                    distance = (head.Position - lpChar.Head.Position).Magnitude
-                end
-                
-                if distance < 55 then
-                    if not isExpanded then
-                        isExpanded = true
-                        AliasLabel.Text = displayAliasText .. "|"
-                        local textWidth = AliasLabel.TextBounds.X
-                        AliasLabel.Text = "" 
-                        AliasLabel.Size = UDim2.new(0, textWidth + 4, 1, 0)
-                        local totalFitWidth = 8 + 26 + 8 + textWidth + 12
-                        TweenService:Create(TagButton, TweenInfo.new(0.3, Enum.EasingStyle.Quad, Enum.EasingDirection.Out), {Size = UDim2.new(0, totalFitWidth, 0, 40)}):Play()
-                        TweenService:Create(LogoContainer, TweenInfo.new(0.3, Enum.EasingStyle.Quad, Enum.EasingDirection.Out), {Size = UDim2.new(0, 26, 0, 26), Position = UDim2.new(0, 7, 0, 7)}):Play()
-                        TweenService:Create(LogoCorner, TweenInfo.new(0.3), {CornerRadius = UDim.new(1, 0)}):Play()
-                    end
-                else
-                    if isExpanded then
-                        isExpanded = false
-                        TweenService:Create(TagButton, TweenInfo.new(0.3, Enum.EasingStyle.Quad, Enum.EasingDirection.Out), {Size = UDim2.new(0, 40, 0, 40)}):Play()
-                        TweenService:Create(LogoContainer, TweenInfo.new(0.3, Enum.EasingStyle.Quad, Enum.EasingDirection.Out), {Size = UDim2.new(1, 0, 1, 0), Position = UDim2.new(0, 0, 0, 0)}):Play()
-                        TweenService:Create(LogoCorner, TweenInfo.new(0.3), {CornerRadius = UDim.new(0.25, 0)}):Play()
-                        AliasLabel.Text = ""
-                    end
-                end
-            end)
+    local FriendIcon = Instance.new("ImageLabel", LogoContainer)
+    FriendIcon.Size = UDim2.new(0.7, 0, 0.7, 0)
+    FriendIcon.AnchorPoint = Vector2.new(0.5, 0.5)
+    FriendIcon.Position = UDim2.new(0.5, 0, 0.5, 0)
+    FriendIcon.BackgroundTransparency = 1
+    FriendIcon.Image = "rbxthumb://type=Asset&id=136701428260164&w=150&h=150"
+    FriendIcon.ZIndex = 4
 
-            task.spawn(function()
-                while Billboard and Billboard.Parent do
-                    if isExpanded then
-                        for i = 1, #displayAliasText do
-                            if not Billboard or not Billboard.Parent or not isExpanded then break end
-                            AliasLabel.Text = string.sub(displayAliasText, 1, i) .. "|"
-                            task.wait(0.04)
-                        end
-                        for b = 1, 5 do
-                            if not Billboard or not Billboard.Parent or not isExpanded then break end
-                            AliasLabel.Text = displayAliasText .. "|"
-                            task.wait(0.4)
-                            if not isExpanded then break end
-                            AliasLabel.Text = displayAliasText
-                            task.wait(0.4)
-                        end
-                        for i = #displayAliasText, 0, -1 do
-                            if not Billboard or not Billboard.Parent or not isExpanded then break end
-                            AliasLabel.Text = string.sub(displayAliasText, 1, i) .. "|"
-                            task.wait(0.06) 
-                        end
-                        if isExpanded then AliasLabel.Text = "|" end
-                        task.wait(0.5)
-                    else
-                        task.wait(0.5)
-                    end
-                end
+    local ContentContainer = Instance.new("Frame", TagButton)
+    ContentContainer.Name = "Content"
+    ContentContainer.Size = UDim2.new(1, -40, 1, 0)
+    ContentContainer.Position = UDim2.new(0, 42, 0, 0)
+    ContentContainer.BackgroundTransparency = 1
+    ContentContainer.ZIndex = 2
+    ContentContainer.Active = false
+
+    local ContentLayout = Instance.new("UIListLayout", ContentContainer)
+    ContentLayout.FillDirection = Enum.FillDirection.Horizontal
+    ContentLayout.HorizontalAlignment = Enum.HorizontalAlignment.Left 
+    ContentLayout.VerticalAlignment = Enum.VerticalAlignment.Center
+    ContentLayout.SortOrder = Enum.SortOrder.LayoutOrder 
+    ContentLayout.Padding = UDim.new(0, 6) 
+
+    local AliasLabel = Instance.new("TextLabel", ContentContainer)
+    AliasLabel.BackgroundTransparency = 1
+    AliasLabel.Size = UDim2.new(0, 0, 1, 0)
+    AliasLabel.Text = ""
+    AliasLabel.TextColor3 = Color3.fromRGB(15, 15, 15) 
+    AliasLabel.Font = Enum.Font.GothamBlack
+    AliasLabel.TextSize = 14 
+    AliasLabel.TextXAlignment = Enum.TextXAlignment.Left
+    AliasLabel.LayoutOrder = 2 
+    AliasLabel.ZIndex = 3
+
+    -- TP BLOQUEADO PARA TI MISMO
+    TagButton.Activated:Connect(function()
+        if player == LocalPlayer then return end
+        pcall(function()
+            local lpChar = LocalPlayer.Character
+            local targetChar = player.Character
+            if lpChar and lpChar:FindFirstChild("HumanoidRootPart") and targetChar and targetChar:FindFirstChild("HumanoidRootPart") then
+                PlayTeleportSound() 
+                local targetHRP = targetChar.HumanoidRootPart
+                local newCFrame = targetHRP.CFrame * CFrame.new(4, 0, 2) 
+                lpChar:PivotTo(newCFrame)
+            end
+        end)
+    end)
+
+    local isExpanded = false
+    local orbTimer = 0
+    local displayAliasText = player.DisplayName
+    
+    RunService.RenderStepped:Connect(function(dt)
+        if not Billboard or not Billboard.Parent then return end
+
+        orbTimer = orbTimer + dt
+        if orbTimer >= 0.15 then
+            orbTimer = 0
+            pcall(function()
+                local orb = Instance.new("Frame")
+                local size = math.random(2, 5)
+                orb.Size = UDim2.new(0, size, 0, size)
+                orb.Position = UDim2.new(math.random(10, 90)/100, 0, 1.2, 0)
+                orb.BackgroundColor3 = Color3.fromRGB(255, 255, 255)
+                orb.BackgroundTransparency = 0.4
+                orb.BorderSizePixel = 0
+                orb.ZIndex = 1
+                orb.Active = false 
+                Instance.new("UICorner", orb).CornerRadius = UDim.new(1, 0)
+                orb.Parent = OrbContainer
+
+                local tween = TweenService:Create(orb, TweenInfo.new(math.random(15, 30)/10, Enum.EasingStyle.Sine, Enum.EasingDirection.Out), {
+                    Position = UDim2.new(orb.Position.X.Scale, 0, -0.2, 0),
+                    BackgroundTransparency = 1
+                })
+                tween:Play()
+                tween.Completed:Connect(function() orb:Destroy() end)
             end)
         end
 
-        if player.Character then apply(player.Character) end
-        player.CharacterAdded:Connect(apply)
+        local distance = 9999
+        local lpChar = LocalPlayer.Character
+        if lpChar and lpChar:FindFirstChild("Head") then
+            distance = (head.Position - lpChar.Head.Position).Magnitude
+        end
+        
+        if distance < 55 then
+            if not isExpanded then
+                isExpanded = true
+                AliasLabel.Text = displayAliasText .. "|"
+                local textWidth = AliasLabel.TextBounds.X
+                AliasLabel.Text = "" 
+                AliasLabel.Size = UDim2.new(0, textWidth + 4, 1, 0)
+                local totalFitWidth = 8 + 26 + 8 + textWidth + 12
+                TweenService:Create(TagButton, TweenInfo.new(0.3, Enum.EasingStyle.Quad, Enum.EasingDirection.Out), {Size = UDim2.new(0, totalFitWidth, 0, 40)}):Play()
+                TweenService:Create(LogoContainer, TweenInfo.new(0.3, Enum.EasingStyle.Quad, Enum.EasingDirection.Out), {Size = UDim2.new(0, 26, 0, 26), Position = UDim2.new(0, 7, 0, 7)}):Play()
+                TweenService:Create(LogoCorner, TweenInfo.new(0.3), {CornerRadius = UDim.new(1, 0)}):Play()
+            end
+        else
+            if isExpanded then
+                isExpanded = false
+                TweenService:Create(TagButton, TweenInfo.new(0.3, Enum.EasingStyle.Quad, Enum.EasingDirection.Out), {Size = UDim2.new(0, 40, 0, 40)}):Play()
+                TweenService:Create(LogoContainer, TweenInfo.new(0.3, Enum.EasingStyle.Quad, Enum.EasingDirection.Out), {Size = UDim2.new(1, 0, 1, 0), Position = UDim2.new(0, 0, 0, 0)}):Play()
+                TweenService:Create(LogoCorner, TweenInfo.new(0.3), {CornerRadius = UDim.new(0.25, 0)}):Play()
+                AliasLabel.Text = ""
+            end
+        end
+    end)
+
+    task.spawn(function()
+        while Billboard and Billboard.Parent do
+            if isExpanded then
+                for i = 1, #displayAliasText do
+                    if not Billboard or not Billboard.Parent or not isExpanded then break end
+                    AliasLabel.Text = string.sub(displayAliasText, 1, i) .. "|"
+                    task.wait(0.04)
+                end
+                for b = 1, 5 do
+                    if not Billboard or not Billboard.Parent or not isExpanded then break end
+                    AliasLabel.Text = displayAliasText .. "|"
+                    task.wait(0.4)
+                    if not isExpanded then break end
+                    AliasLabel.Text = displayAliasText
+                    task.wait(0.4)
+                end
+                for i = #displayAliasText, 0, -1 do
+                    if not Billboard or not Billboard.Parent or not isExpanded then break end
+                    AliasLabel.Text = string.sub(displayAliasText, 1, i) .. "|"
+                    task.wait(0.06) 
+                end
+                if isExpanded then AliasLabel.Text = "|" end
+                task.wait(0.5)
+            else
+                task.wait(0.5)
+            end
+        end
     end)
 end
 
+-- ========================================================
+-- CONTROLADOR DE JUGADORES (Evita que el código se duplique)
+-- ========================================================
+local connectedPlayers = {}
 
--- Aplicar a jugadores actuales
-for _, player in ipairs(Players:GetPlayers()) do
-    applyTagToPlayer(player)
+local function setupPlayer(player)
+    if connectedPlayers[player.UserId] then return end
+    connectedPlayers[player.UserId] = true
+
+    local function onCharacterAdded(character)
+        task.wait(0.5) -- Pequeño respiro para que cargue la cabeza
+        if isFriend(player) then
+            createVisualTag(player, character)
+        end
+    end
+
+    if player.Character then task.spawn(onCharacterAdded, player.Character) end
+    player.CharacterAdded:Connect(onCharacterAdded)
 end
 
--- Aplicar a jugadores que se unan
-Players.PlayerAdded:Connect(function(player)
-    applyTagToPlayer(player)
-end)
+-- Inicializamos a todos los jugadores una única vez
+for _, player in ipairs(Players:GetPlayers()) do setupPlayer(player) end
+Players.PlayerAdded:Connect(setupPlayer)
 
-
--- Bucle de comprobación original adaptado
+-- Bucle Maestro (Revisa Firebase en secreto sin romper nada)
 task.spawn(function()
     while task.wait(2.5) do
         if not ScreenGui or not ScreenGui.Parent then break end
+        
         for _, player in ipairs(Players:GetPlayers()) do
-            -- ELIMINADO EL BLOQUEO AQUI PARA REVISARTE A TI MISMO
-            
-            local isF = false
-            local wasFriend = friendsCache[player.UserId]
-            local isNowFriend = false
-            
-            -- Revisamos en Firebase
-            isNowFriend = isFriend(player)
-            
-            if isNowFriend and not wasFriend then
-                friendsCache[player.UserId] = true
-                isF = true
-                task.spawn(function()
-                    task.wait(1)
-                    applyTagToPlayer(player)
-                end)
-            else
-                friendsCache[player.UserId] = isNowFriend
-                isF = isNowFriend
-            end
-            
-            if isF then 
+            if isFriend(player) then
+                -- Si está en Firebase y se le cayó el tag, se lo ponemos
                 if player.Character and player.Character:FindFirstChild("Head") then
                     local hasTag = false
                     for _, child in ipairs(ScreenGui:GetChildren()) do
-                        if child.Name == "BloxyTag_Dynamic" and child.Adornee == player.Character.Head then hasTag = true end
+                        if child.Name == "BloxyTag_Dynamic" and child.Adornee == player.Character.Head then 
+                            hasTag = true
+                            break
+                        end
                     end
-                    if not hasTag then applyTagToPlayer(player) end
+                    if not hasTag then createVisualTag(player, player.Character) end
                 end
             else
-                -- Si desaparece de Firebase, le quitamos el tag visual
+                -- Si ya no está en Firebase, le quitamos el tag
                 if player.Character and player.Character:FindFirstChild("Head") then
                     for _, child in ipairs(ScreenGui:GetChildren()) do
                         if child.Name == "BloxyTag_Dynamic" and child.Adornee == player.Character.Head then 
@@ -370,7 +349,6 @@ task.spawn(function()
                     end
                 end
             end
-            
         end
     end
 end)
