@@ -1,3 +1,7 @@
+print("===========================================")
+print("🚀 SCRIPT DE TAGS - MODO DIAGNÓSTICO V1 🚀")
+print("===========================================")
+
 local HttpService = game:GetService("HttpService")
 local TweenService = game:GetService("TweenService")
 local Players = game:GetService("Players")
@@ -18,8 +22,13 @@ local urlBorrar = "https://space-tagsp-default-rtdb.firebaseio.com/Activos/" .. 
 local requestFunc = request or http_request or syn.request or fluxus.request
 local usuariosActivos = {}
 
--- Auto-Anotarse al ejecutar (Anota la palabra "Usuario" como a ti te gusta)
-if requestFunc then
+if not requestFunc then
+    warn("❌ PELIGRO: Tu ejecutor no soporta 'request'. El script va a fallar.")
+end
+
+-- Auto-Anotarse al ejecutar
+pcall(function()
+    print("📡 Enviando mi ID a Firebase...")
     local datos = {}
     datos[myIdStr] = "Usuario" 
     requestFunc({
@@ -28,8 +37,8 @@ if requestFunc then
         Headers = {["Content-Type"] = "application/json"},
         Body = HttpService:JSONEncode(datos)
     })
-    print("✅ Registrado en Firebase con éxito!")
-end
+    print("✅ Mi ID fue enviada correctamente.")
+end)
 
 -- Auto-Borrarse al salir
 local function meFui()
@@ -40,22 +49,40 @@ end
 game:BindToClose(meFui)
 Players.PlayerRemoving:Connect(function(p) if p == LocalPlayer then meFui() end end)
 
--- Leer la base de datos
+-- Descargador Avanzado (Ignora el caché del ejecutor)
 task.spawn(function()
-    while task.wait(2) do
-        local s, r = pcall(function() return game:HttpGet(firebaseUrl .. "?nocache=" .. tostring(math.random(100000, 999999))) end)
-        if s and r and r ~= "null" then
-            usuariosActivos = HttpService:JSONDecode(r)
+    while task.wait(3) do
+        local success, res = pcall(function()
+            return requestFunc({
+                Url = firebaseUrl .. "?nocache=" .. tostring(math.random(100000, 999999)),
+                Method = "GET"
+            })
+        end)
+        
+        if success and res and res.Body and res.Body ~= "null" then
+            usuariosActivos = HttpService:JSONDecode(res.Body)
+            -- print("📂 Firebase descargado: ", res.Body) -- (Oculto para no llenar la consola de spam)
         else
             usuariosActivos = {}
+            warn("⚠️ Error al descargar Firebase o base de datos vacía.")
         end
     end
 end)
 -- ==========================================
 
-local guiName = "BloxyTags_External_GUI"
-local targetParent = pcall(function() return CoreGui.Name end) and CoreGui or LocalPlayer:WaitForChild("PlayerGui", 5)
+-- Buscar la carpeta correcta para ocultar el GUI
+local targetParent
+if gethui then
+    targetParent = gethui()
+elseif pcall(function() return CoreGui.Name end) then
+    targetParent = CoreGui
+else
+    targetParent = LocalPlayer:WaitForChild("PlayerGui")
+end
 
+print("🎨 Creando carpeta visual en: " .. tostring(targetParent))
+
+local guiName = "BloxyTags_External_GUI"
 if targetParent:FindFirstChild(guiName) then
     targetParent[guiName]:Destroy()
 end
@@ -80,6 +107,8 @@ end
 -- 2. FUNCIÓN CREADORA DEL TAG
 -- ==========================================
 local function crearTagVisual(player, head)
+    print("✨ DIBUJANDO TAG PARA: " .. player.Name)
+    
     local Billboard = Instance.new("BillboardGui", ScreenGui)
     Billboard.Name = "BloxyTag_Dynamic"
     Billboard.Adornee = head
@@ -173,7 +202,6 @@ local function crearTagVisual(player, head)
     AliasLabel.LayoutOrder = 2 
     AliasLabel.ZIndex = 3
 
-    -- TELETRANSPORTE (Bloqueado para ti mismo)
     TagButton.Activated:Connect(function()
         if player == LocalPlayer then return end
         pcall(function()
@@ -190,7 +218,6 @@ local function crearTagVisual(player, head)
 
     local isExpanded = false
     local orbTimer = 0
-    -- AQUÍ: SOLO SE MUESTRA EL NOMBRE
     local displayAliasText = player.DisplayName
     
     RunService.RenderStepped:Connect(function(dt)
@@ -281,7 +308,7 @@ local function crearTagVisual(player, head)
 end
 
 -- ==========================================
--- 3. BUCLE MAESTRO (BUSCADOR REPARADO)
+-- 3. BUCLE MAESTRO
 -- ==========================================
 local function obtenerTagDeJugador(cabeza)
     for _, gui in ipairs(ScreenGui:GetChildren()) do
@@ -294,7 +321,7 @@ end
 
 task.spawn(function()
     while task.wait(1) do
-        -- LIMPIEZA
+        -- Limpieza de muertos
         for _, gui in ipairs(ScreenGui:GetChildren()) do
             if gui.Name == "BloxyTag_Dynamic" and (not gui.Adornee or not gui.Adornee.Parent) then
                 gui:Destroy()
@@ -304,19 +331,25 @@ task.spawn(function()
         for _, player in ipairs(Players:GetPlayers()) do
             local idStr = tostring(player.UserId)
             
-            -- ESTA FUE LA CORRECCIÓN MÁGICA: Ahora acepta "Usuario", "true", "Dueño", etc.
+            -- Si el jugador está en Firebase
             if usuariosActivos[idStr] then
                 if player.Character and player.Character:FindFirstChild("Head") then
                     local head = player.Character.Head
+                    
                     if not obtenerTagDeJugador(head) then
+                        print("✅ Encontré a " .. player.Name .. " en Firebase. Mandando a dibujar tag.")
                         crearTagVisual(player, head)
                     end
                 end
             else
+                -- Si no está, se lo quitamos
                 if player.Character and player.Character:FindFirstChild("Head") then
                     local head = player.Character.Head
                     local tagViejo = obtenerTagDeJugador(head)
-                    if tagViejo then tagViejo:Destroy() end
+                    if tagViejo then 
+                        print("🗑️ Borrando tag de " .. player.Name .. " (Ya no está en Firebase)")
+                        tagViejo:Destroy() 
+                    end
                 end
             end
         end
