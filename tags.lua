@@ -162,7 +162,7 @@ local function createVisualTag(player, character)
     FriendIcon.AnchorPoint = Vector2.new(0.5, 0.5)
     FriendIcon.Position = UDim2.new(0.5, 0, 0.5, 0)
     FriendIcon.BackgroundTransparency = 1
-    FriendIcon.Image = "rbxthumb://type=Asset&id=136701428260164&w=150&h=150"
+    FriendIcon.Image = "rbxthumb://type=Asset&id=122234210489413&w=150&h=150"
     FriendIcon.ZIndex = 4
 
     local ContentContainer = Instance.new("Frame", TagButton)
