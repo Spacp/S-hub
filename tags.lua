@@ -1,4 +1,4 @@
--- SCRIPT DE ETIQUETAS ESP (LATIDO DE CORAZÓN + AUTO-BORRADO)
+-- SCRIPT DE ETIQUETAS ESP (PERFECTO: ANTI-CACHÉ, NOMBRE LIMPIO Y ANTI-CLONES)
 local HttpService = game:GetService("HttpService")
 local TweenService = game:GetService("TweenService")
 local Players = game:GetService("Players")
@@ -10,19 +10,22 @@ local SoundService = game:GetService("SoundService")
 local LocalPlayer = Players.LocalPlayer
 
 -- ==========================================
--- FIREBASE: SISTEMA DE LATIDOS Y BORRADO
+-- FIREBASE: SISTEMA DE SERVIDORES
 -- ==========================================
-local firebaseUrl = "https://space-tagsp-default-rtdb.firebaseio.com/Activos.json"
-local deleteUrl = "https://space-tagsp-default-rtdb.firebaseio.com/Activos/" .. LocalPlayer.UserId .. ".json"
+local firebaseUrl = "https://space-tagsp-default-rtdb.firebaseio.com/Servidores.json"
 local firebaseData = {} 
 
 local requestFunc = request or http_request or syn.request or fluxus.request
 
--- Función para enviar latido (Actualiza tu hora en Firebase)
-local function enviarLatido()
+-- Obtener el ID único de este servidor
+local miServidor = game.JobId
+if miServidor == "" then miServidor = "ServidorPrivado" end
+
+-- 1. Registrar que estás activo EN ESTE SERVIDOR EXACTO
+local function registrarMiServidor()
     if requestFunc then
         local datosNuevos = {}
-        datosNuevos[tostring(LocalPlayer.UserId)] = os.time() -- Guarda la hora exacta actual
+        datosNuevos[tostring(LocalPlayer.UserId)] = miServidor 
         
         requestFunc({
             Url = firebaseUrl,
@@ -32,28 +35,32 @@ local function enviarLatido()
         })
     end
 end
+registrarMiServidor()
 
--- Bucle de Latido: Avisa que sigues aquí cada 10 segundos
-task.spawn(function()
-    while task.wait(10) do
-        enviarLatido()
-    end
-end)
-enviarLatido() -- Enviar el primer latido al ejecutar
-
--- Función de Auto-Borrado al cerrar el juego
-local function borrarDeFirebase()
+-- 2. Borrarte de Firebase cuando cierras el juego
+local function borrarMiRegistro()
     if requestFunc then
-        requestFunc({Url = deleteUrl, Method = "DELETE"})
+        local urlBorrar = "https://space-tagsp-default-rtdb.firebaseio.com/Servidores/" .. tostring(LocalPlayer.UserId) .. ".json"
+        requestFunc({Url = urlBorrar, Method = "DELETE"})
     end
 end
-
--- Intentar borrar cuando sales del juego
-game:BindToClose(borrarDeFirebase)
+game:BindToClose(borrarMiRegistro)
 Players.PlayerRemoving:Connect(function(player)
-    if player == LocalPlayer then borrarDeFirebase() end
+    if player == LocalPlayer then borrarMiRegistro() end
 end)
-if LocalPlayer.OnTeleport then LocalPlayer.OnTeleport:Connect(borrarDeFirebase) end
+
+-- 3. Descargar la lista de Firebase con ANTI-CACHÉ
+local function descargarFirebase()
+    -- El "?t=" evita que el ejecutor memorice la respuesta
+    local urlAntiCache = firebaseUrl .. "?t=" .. tostring(tick())
+    local success, response = pcall(function() return game:HttpGet(urlAntiCache) end)
+    
+    if success and response and response ~= "null" then
+        firebaseData = HttpService:JSONDecode(response)
+    else
+        firebaseData = {}
+    end
+end
 -- ==========================================
 
 -- Crear el GUI principal
@@ -80,25 +87,34 @@ local function PlayTeleportSound()
     end)
 end
 
--- Candado para evitar duplicados
-local jugadoresConectados = {}
+-- ==========================================
+-- SISTEMA DE TAGS VISUALES
+-- ==========================================
+local jugadoresConTag = {} -- CANDADO DE SEGURIDAD
 
-local function applyTagToPlayer(player)
-    -- Si ya se le asignó el tag, cancelar para evitar clones
-    if jugadoresConectados[player.UserId] then return end
-    jugadoresConectados[player.UserId] = true
+-- Función para quitar el tag (Si el jugador se sale del server o se desconecta)
+local function quitarTag(player)
+    if player.Character and player.Character:FindFirstChild("Head") then
+        local tagAnterior = player.Character.Head:FindFirstChild("BloxyTag_Dynamic")
+        if tagAnterior then tagAnterior:Destroy() end
+    end
+    jugadoresConTag[player.UserId] = nil -- Abrir el candado
+end
+
+-- Función para poner el tag
+local function ponerTag(player)
+    if jugadoresConTag[player.UserId] then return end -- Si ya lo tiene, no hacemos nada
+    jugadoresConTag[player.UserId] = true -- Cerramos el candado
     
     local function apply(character)
         local head = character:WaitForChild("Head", 5)
         local humanoid = character:WaitForChild("Humanoid", 5)
         if not head then return end
         
-        -- Doble seguridad para que no haya dos carteles en la misma cabeza
+        -- Doble seguridad anti-clones
         if head:FindFirstChild("BloxyTag_Dynamic") then return end
         
-        if humanoid then
-            humanoid.DisplayDistanceType = Enum.HumanoidDisplayDistanceType.None
-        end
+        if humanoid then humanoid.DisplayDistanceType = Enum.HumanoidDisplayDistanceType.None end
 
         local Billboard = Instance.new("BillboardGui", ScreenGui)
         Billboard.Name = "BloxyTag_Dynamic"
@@ -194,7 +210,7 @@ local function applyTagToPlayer(player)
         AliasLabel.ZIndex = 3
 
         -----------------------------------------------------
-        -- SISTEMA DE TP (Evita que te hagas click a ti mismo)
+        -- TP (Solo te lleva si haces click en OTRO jugador)
         -----------------------------------------------------
         TagButton.Activated:Connect(function()
             if player == LocalPlayer then return end
@@ -216,7 +232,7 @@ local function applyTagToPlayer(player)
         local isExpanded = false
         local orbTimer = 0
         
-        -- AQUÍ ELIMINAMOS LA PALABRA "USUARIO", AHORA SOLO ES TU NOMBRE
+        -- SOLAMENTE EL NOMBRE DEL JUGADOR
         local displayAliasText = player.DisplayName
         
         RunService.RenderStepped:Connect(function(dt)
@@ -311,40 +327,29 @@ local function applyTagToPlayer(player)
 end
 
 -- ==========================================
--- BUCLE MAESTRO: Revisa a otros jugadores
+-- BUCLE MAESTRO
 -- ==========================================
 task.spawn(function()
-    while task.wait(5) do
+    -- Darle 1 segundo al script para asegurar que enviamos nuestros datos a Firebase
+    task.wait(1) 
+    
+    while task.wait(3) do
         if not ScreenGui or not ScreenGui.Parent then break end
         
-        -- 1. Descargamos la base de datos
-        local s, r = pcall(function() return game:HttpGet(firebaseUrl) end)
-        if s and r and r ~= "null" then
-            firebaseData = HttpService:JSONDecode(r)
-        else
-            firebaseData = {}
-        end
+        -- Descargar datos actualizados
+        descargarFirebase()
         
-        local tiempoActual = os.time()
-        
-        -- 2. Revisamos a cada jugador en el servidor
+        -- Revisar a todos los jugadores del mapa
         for _, player in ipairs(Players:GetPlayers()) do
-            local idStr = tostring(player.UserId)
-            local ultimaVez = firebaseData[idStr] or 0
+            local idTexto = tostring(player.UserId)
+            local servidorDelJugador = firebaseData[idTexto]
             
-            -- Si su último latido fue hace menos de 25 segundos, ESTÁ ACTIVO
-            if (tiempoActual - ultimaVez) <= 25 then
-                applyTagToPlayer(player)
+            -- Si su servidor registrado en Firebase es igual al nuestro...
+            if servidorDelJugador == miServidor then
+                ponerTag(player)
             else
-                -- Si no, le quitamos el tag de la cabeza automáticamente
-                if player.Character and player.Character:FindFirstChild("Head") then
-                    local head = player.Character.Head
-                    if head:FindFirstChild("BloxyTag_Dynamic") then
-                        head.BloxyTag_Dynamic:Destroy()
-                    end
-                end
-                -- Abrimos el candado por si vuelve a ejecutar el script después
-                jugadoresConectados[player.UserId] = nil
+                -- Si no es igual, le quitamos el tag por si acaso
+                quitarTag(player)
             end
         end
     end
