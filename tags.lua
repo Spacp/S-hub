@@ -1,4 +1,4 @@
--- SCRIPT DE ETIQUETAS ESP (PERFECTO: ANTI-CACHÉ, NOMBRE LIMPIO Y ANTI-CLONES)
+-- SCRIPT DE ETIQUETAS ESP (VERSIÓN FINAL ANTI-CACHÉ CLOUDFLARE)
 local HttpService = game:GetService("HttpService")
 local TweenService = game:GetService("TweenService")
 local Players = game:GetService("Players")
@@ -9,38 +9,58 @@ local SoundService = game:GetService("SoundService")
 
 local LocalPlayer = Players.LocalPlayer
 
+print("Iniciando Script de Tags...")
+
 -- ==========================================
 -- FIREBASE: SISTEMA DE SERVIDORES
 -- ==========================================
-local firebaseUrl = "https://space-tagsp-default-rtdb.firebaseio.com/Servidores.json"
+-- Creamos una carpeta nueva llamada "UsuariosActivos"
+local firebaseUrl = "https://space-tagsp-default-rtdb.firebaseio.com/UsuariosActivos.json"
 local firebaseData = {} 
 
 local requestFunc = request or http_request or syn.request or fluxus.request
 
--- Obtener el ID único de este servidor
-local miServidor = game.JobId
-if miServidor == "" then miServidor = "ServidorPrivado" end
+if not requestFunc then
+    warn("¡Tu ejecutor no soporta peticiones HTTP! El script no funcionará bien.")
+end
 
--- 1. Registrar que estás activo EN ESTE SERVIDOR EXACTO
+-- Obtener el ID del servidor
+local miServidor = game.JobId
+if miServidor == "" or not miServidor then 
+    miServidor = "ServidorPrivado_O_Studio" 
+end
+
+print("Mi Servidor Actual es: " .. miServidor)
+
+-- 1. Registrarme en Firebase
 local function registrarMiServidor()
     if requestFunc then
+        local miIdStr = tostring(LocalPlayer.UserId)
         local datosNuevos = {}
-        datosNuevos[tostring(LocalPlayer.UserId)] = miServidor 
+        datosNuevos[miIdStr] = miServidor 
         
-        requestFunc({
-            Url = firebaseUrl,
-            Method = "PATCH",
-            Headers = {["Content-Type"] = "application/json"},
-            Body = HttpService:JSONEncode(datosNuevos)
-        })
+        local success, response = pcall(function()
+            return requestFunc({
+                Url = firebaseUrl,
+                Method = "PATCH",
+                Headers = {["Content-Type"] = "application/json"},
+                Body = HttpService:JSONEncode(datosNuevos)
+            })
+        end)
+        
+        if success then
+            print("¡Registrado en Firebase con éxito!")
+        else
+            warn("Error al registrarse en Firebase.")
+        end
     end
 end
 registrarMiServidor()
 
--- 2. Borrarte de Firebase cuando cierras el juego
+-- 2. Borrarme al salir
 local function borrarMiRegistro()
     if requestFunc then
-        local urlBorrar = "https://space-tagsp-default-rtdb.firebaseio.com/Servidores/" .. tostring(LocalPlayer.UserId) .. ".json"
+        local urlBorrar = "https://space-tagsp-default-rtdb.firebaseio.com/UsuariosActivos/" .. tostring(LocalPlayer.UserId) .. ".json"
         requestFunc({Url = urlBorrar, Method = "DELETE"})
     end
 end
@@ -49,9 +69,8 @@ Players.PlayerRemoving:Connect(function(player)
     if player == LocalPlayer then borrarMiRegistro() end
 end)
 
--- 3. Descargar la lista de Firebase con ANTI-CACHÉ
+-- 3. Descargar la lista
 local function descargarFirebase()
-    -- El "?t=" evita que el ejecutor memorice la respuesta
     local urlAntiCache = firebaseUrl .. "?t=" .. tostring(tick())
     local success, response = pcall(function() return game:HttpGet(urlAntiCache) end)
     
@@ -63,7 +82,6 @@ local function descargarFirebase()
 end
 -- ==========================================
 
--- Crear el GUI principal
 local guiName = "BloxyTags_External_GUI"
 local targetParent = pcall(function() return CoreGui.Name end) and CoreGui or LocalPlayer:WaitForChild("PlayerGui", 5)
 
@@ -87,31 +105,27 @@ local function PlayTeleportSound()
     end)
 end
 
--- ==========================================
--- SISTEMA DE TAGS VISUALES
--- ==========================================
-local jugadoresConTag = {} -- CANDADO DE SEGURIDAD
+local jugadoresConTag = {} 
 
--- Función para quitar el tag (Si el jugador se sale del server o se desconecta)
 local function quitarTag(player)
     if player.Character and player.Character:FindFirstChild("Head") then
         local tagAnterior = player.Character.Head:FindFirstChild("BloxyTag_Dynamic")
         if tagAnterior then tagAnterior:Destroy() end
     end
-    jugadoresConTag[player.UserId] = nil -- Abrir el candado
+    jugadoresConTag[player.UserId] = nil 
 end
 
--- Función para poner el tag
 local function ponerTag(player)
-    if jugadoresConTag[player.UserId] then return end -- Si ya lo tiene, no hacemos nada
-    jugadoresConTag[player.UserId] = true -- Cerramos el candado
+    if jugadoresConTag[player.UserId] then return end 
+    jugadoresConTag[player.UserId] = true 
+    
+    print("Poniendo tag a: " .. player.Name)
     
     local function apply(character)
         local head = character:WaitForChild("Head", 5)
         local humanoid = character:WaitForChild("Humanoid", 5)
         if not head then return end
         
-        -- Doble seguridad anti-clones
         if head:FindFirstChild("BloxyTag_Dynamic") then return end
         
         if humanoid then humanoid.DisplayDistanceType = Enum.HumanoidDisplayDistanceType.None end
@@ -231,8 +245,6 @@ local function ponerTag(player)
 
         local isExpanded = false
         local orbTimer = 0
-        
-        -- SOLAMENTE EL NOMBRE DEL JUGADOR
         local displayAliasText = player.DisplayName
         
         RunService.RenderStepped:Connect(function(dt)
@@ -330,25 +342,20 @@ end
 -- BUCLE MAESTRO
 -- ==========================================
 task.spawn(function()
-    -- Darle 1 segundo al script para asegurar que enviamos nuestros datos a Firebase
     task.wait(1) 
     
     while task.wait(3) do
         if not ScreenGui or not ScreenGui.Parent then break end
         
-        -- Descargar datos actualizados
         descargarFirebase()
         
-        -- Revisar a todos los jugadores del mapa
         for _, player in ipairs(Players:GetPlayers()) do
             local idTexto = tostring(player.UserId)
             local servidorDelJugador = firebaseData[idTexto]
             
-            -- Si su servidor registrado en Firebase es igual al nuestro...
             if servidorDelJugador == miServidor then
                 ponerTag(player)
             else
-                -- Si no es igual, le quitamos el tag por si acaso
                 quitarTag(player)
             end
         end
