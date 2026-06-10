@@ -18,17 +18,17 @@ local urlBorrar = "https://space-tagsp-default-rtdb.firebaseio.com/Activos/" .. 
 local requestFunc = request or http_request or syn.request or fluxus.request
 local usuariosActivos = {}
 
--- Auto-Anotarse al ejecutar
+-- Auto-Anotarse al ejecutar (Anota la palabra "Usuario" como a ti te gusta)
 if requestFunc then
     local datos = {}
-    datos[myIdStr] = true 
+    datos[myIdStr] = "Usuario" 
     requestFunc({
         Url = firebaseUrl,
         Method = "PATCH",
         Headers = {["Content-Type"] = "application/json"},
         Body = HttpService:JSONEncode(datos)
     })
-    print("✅ Registrado en Firebase correctamente")
+    print("✅ Registrado en Firebase con éxito!")
 end
 
 -- Auto-Borrarse al salir
@@ -283,7 +283,6 @@ end
 -- ==========================================
 -- 3. BUCLE MAESTRO (BUSCADOR REPARADO)
 -- ==========================================
--- Esta función busca correctamente en la pantalla para no crear clones
 local function obtenerTagDeJugador(cabeza)
     for _, gui in ipairs(ScreenGui:GetChildren()) do
         if gui.Name == "BloxyTag_Dynamic" and gui.Adornee == cabeza then
@@ -295,7 +294,7 @@ end
 
 task.spawn(function()
     while task.wait(1) do
-        -- LIMPIEZA: Si un jugador murió, borramos su tag flotante
+        -- LIMPIEZA
         for _, gui in ipairs(ScreenGui:GetChildren()) do
             if gui.Name == "BloxyTag_Dynamic" and (not gui.Adornee or not gui.Adornee.Parent) then
                 gui:Destroy()
@@ -305,24 +304,19 @@ task.spawn(function()
         for _, player in ipairs(Players:GetPlayers()) do
             local idStr = tostring(player.UserId)
             
-            -- Si el jugador ESTÁ en la base de datos...
-            if usuariosActivos[idStr] == true then
+            -- ESTA FUE LA CORRECCIÓN MÁGICA: Ahora acepta "Usuario", "true", "Dueño", etc.
+            if usuariosActivos[idStr] then
                 if player.Character and player.Character:FindFirstChild("Head") then
                     local head = player.Character.Head
-                    
-                    -- CANDADO SEGURO: Si no encuentra el tag, lo crea.
                     if not obtenerTagDeJugador(head) then
                         crearTagVisual(player, head)
                     end
                 end
             else
-                -- Si NO está en la base de datos, le borramos el tag si es que lo tiene
                 if player.Character and player.Character:FindFirstChild("Head") then
                     local head = player.Character.Head
                     local tagViejo = obtenerTagDeJugador(head)
-                    if tagViejo then
-                        tagViejo:Destroy()
-                    end
+                    if tagViejo then tagViejo:Destroy() end
                 end
             end
         end
