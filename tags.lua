@@ -21,13 +21,14 @@ local usuariosActivos = {}
 -- Auto-Anotarse al ejecutar
 if requestFunc then
     local datos = {}
-    datos[myIdStr] = true -- Solo guardamos que existes (true)
+    datos[myIdStr] = true -- Solo guardamos "true"
     requestFunc({
         Url = firebaseUrl,
         Method = "PATCH",
         Headers = {["Content-Type"] = "application/json"},
         Body = HttpService:JSONEncode(datos)
     })
+    print("✅ Registrado en Firebase correctamente")
 end
 
 -- Auto-Borrarse al salir
@@ -39,11 +40,10 @@ end
 game:BindToClose(meFui)
 Players.PlayerRemoving:Connect(function(p) if p == LocalPlayer then meFui() end end)
 
--- Bucle para leer la base de datos cada 2 segundos
+-- Leer la base de datos
 task.spawn(function()
     while task.wait(2) do
-        -- El ?t=tick() evita el bug de la caché
-        local s, r = pcall(function() return game:HttpGet(firebaseUrl .. "?t=" .. tostring(tick())) end)
+        local s, r = pcall(function() return game:HttpGet(firebaseUrl .. "?nocache=" .. tostring(math.random(100000, 999999))) end)
         if s and r and r ~= "null" then
             usuariosActivos = HttpService:JSONDecode(r)
         else
@@ -173,7 +173,6 @@ local function crearTagVisual(player, head)
     AliasLabel.LayoutOrder = 2 
     AliasLabel.ZIndex = 3
 
-    -- TELETRANSPORTE (Bloqueado para ti mismo)
     TagButton.Activated:Connect(function()
         if player == LocalPlayer then return end
         pcall(function()
@@ -190,7 +189,6 @@ local function crearTagVisual(player, head)
 
     local isExpanded = false
     local orbTimer = 0
-    -- AQUÍ: SOLO SE MUESTRA EL NOMBRE
     local displayAliasText = player.DisplayName
     
     RunService.RenderStepped:Connect(function(dt)
@@ -281,25 +279,21 @@ local function crearTagVisual(player, head)
 end
 
 -- ==========================================
--- 3. BUCLE MAESTRO (Sin bugs)
+-- 3. BUCLE MAESTRO
 -- ==========================================
 task.spawn(function()
     while task.wait(1) do
         for _, player in ipairs(Players:GetPlayers()) do
             local idStr = tostring(player.UserId)
             
-            -- Si el jugador ESTÁ en la base de datos...
-            if usuariosActivos[idStr] then
+            if usuariosActivos[idStr] == true then
                 if player.Character and player.Character:FindFirstChild("Head") then
                     local head = player.Character.Head
-                    
-                    -- CANDADO: Solo si NO tiene el tag, se lo creamos (Evita clones)
                     if not head:FindFirstChild("BloxyTag_Dynamic") then
                         crearTagVisual(player, head)
                     end
                 end
             else
-                -- Si NO está en la base de datos, le borramos el tag si es que lo tiene
                 if player.Character and player.Character:FindFirstChild("Head") then
                     local head = player.Character.Head
                     local tagViejo = head:FindFirstChild("BloxyTag_Dynamic")
@@ -308,7 +302,6 @@ task.spawn(function()
                     end
                 end
             end
-            
         end
     end
 end)
