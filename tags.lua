@@ -1,4 +1,4 @@
--- SCRIPT DE ETIQUETAS ESP (AUTO-REGISTRO AUTOMÁTICO)
+-- SCRIPT DE ETIQUETAS ESP (CON DETECCIÓN DE SERVIDOR ACTIVO)
 local HttpService = game:GetService("HttpService")
 local TweenService = game:GetService("TweenService")
 local Players = game:GetService("Players")
@@ -10,56 +10,55 @@ local SoundService = game:GetService("SoundService")
 local LocalPlayer = Players.LocalPlayer
 
 -- ==========================================
--- CONEXIÓN A FIREBASE Y AUTO-REGISTRO
+-- CONEXIÓN A FIREBASE Y REGISTRO DE SERVIDOR
 -- ==========================================
 local firebaseUrl = "https://space-tagsp-default-rtdb.firebaseio.com/.json"
-local firebaseTags = {} 
+local firebaseData = {} 
 
--- Esta función es la que usan los ejecutores para enviar datos a internet
 local requestFunc = request or http_request or syn.request or fluxus.request
 
--- 1. Función para descargar la lista
+-- Descargar la base de datos completa
 local function descargarFirebase()
     local success, response = pcall(function()
         return game:HttpGet(firebaseUrl)
     end)
     if success and response and response ~= "null" then
-        firebaseTags = HttpService:JSONDecode(response)
+        firebaseData = HttpService:JSONDecode(response)
     else
-        firebaseTags = {}
+        firebaseData = {}
     end
 end
 
--- 2. FUNCIÓN MÁGICA: Auto-registrar a quien ejecute el script
+-- Auto-registrar Jugador y su Servidor Actual
 local function autoRegistrar()
-    descargarFirebase() -- Descargamos para ver quién está
+    descargarFirebase()
     
     local miIdTexto = tostring(LocalPlayer.UserId)
+    local miServidor = game.JobId
+    if miServidor == "" then miServidor = "ServidorPrivado" end -- Por si estás en Roblox Studio
     
-    -- Si no estoy en Firebase, me añado automáticamente
-    if not firebaseTags[miIdTexto] then
-        if requestFunc then
-            local datosNuevos = {}
-            datosNuevos[miIdTexto] = "Usuario" -- El tag por defecto que se le da a tus amigos
-            
-            -- Enviamos nuestra ID a Firebase
-            requestFunc({
-                Url = firebaseUrl,
-                Method = "PATCH",
-                Headers = {["Content-Type"] = "application/json"},
-                Body = HttpService:JSONEncode(datosNuevos)
-            })
-            
-            -- Volvemos a descargar la lista para que ahora sí aparezcamos
-            task.wait(1)
-            descargarFirebase()
-        else
-            print("Tu ejecutor no soporta auto-registro.")
-        end
+    local datosNuevos = {}
+    
+    -- Si no existe en la carpeta "Tags", lo creamos como Usuario
+    if not firebaseData["Tags"] or not firebaseData["Tags"][miIdTexto] then
+        datosNuevos["Tags/" .. miIdTexto] = "Usuario"
+    end
+    
+    -- SIEMPRE actualizamos en qué servidor acaba de inyectar el script
+    datosNuevos["Activos/" .. miIdTexto] = miServidor
+
+    if requestFunc then
+        requestFunc({
+            Url = firebaseUrl,
+            Method = "PATCH",
+            Headers = {["Content-Type"] = "application/json"},
+            Body = HttpService:JSONEncode(datosNuevos)
+        })
+        task.wait(1)
+        descargarFirebase()
     end
 end
 
--- Ejecutamos el auto-registro nada más empezar
 autoRegistrar()
 -- ==========================================
 
@@ -87,14 +86,29 @@ local function PlayTeleportSound()
     end)
 end
 
--- Función principal para poner el tag
+-- Función principal
 local function applyTagToPlayer(player)
     task.spawn(function()
-        local miIdTexto = tostring(player.UserId)
-        local tagDelJugador = firebaseTags[miIdTexto]
+        local idTexto = tostring(player.UserId)
+        local servidorActual = game.JobId
+        if servidorActual == "" then servidorActual = "ServidorPrivado" end
         
-        -- Si el jugador NO está en la base de datos, lo ignoramos
-        if not tagDelJugador then return end 
+        -- Verificar si tiene Tag Y si ejecutó el script en ESTE servidor
+        local tieneTag = firebaseData["Tags"] and firebaseData["Tags"][idTexto]
+        local servidorGuardado = firebaseData["Activos"] and firebaseData["Activos"][idTexto]
+        
+        -- Si no tiene tag, o su servidor guardado no es el mismo que este, LE BORRAMOS EL TAG (por si acaso)
+        if not tieneTag or servidorGuardado ~= servidorActual then 
+            if player.Character and player.Character:FindFirstChild("Head") then
+                local head = player.Character.Head
+                if head:FindFirstChild("BloxyTag_Dynamic") then
+                    head.BloxyTag_Dynamic:Destroy()
+                end
+            end
+            return 
+        end 
+        
+        local tagText = firebaseData["Tags"][idTexto]
         
         local function apply(character)
             local head = character:WaitForChild("Head", 5)
@@ -222,7 +236,7 @@ local function applyTagToPlayer(player)
 
             local isExpanded = false
             local orbTimer = 0
-            local displayAliasText = "[" .. tagDelJugador .. "] " .. player.DisplayName
+            local displayAliasText = "" .. tagText .. "" .. player.DisplayName
             
             RunService.RenderStepped:Connect(function(dt)
                 if not Billboard or not Billboard.Parent then return end
@@ -316,36 +330,15 @@ local function applyTagToPlayer(player)
     end)
 end
 
--- Aplicar tags a todos
-for _, player in ipairs(Players:GetPlayers()) do
-    applyTagToPlayer(player)
-end
-
-Players.PlayerAdded:Connect(function(player)
-    task.wait(2)
-    applyTagToPlayer(player)
-end)
-
--- Actualizar a los demás jugadores
+-- Bucle de comprobación
 task.spawn(function()
-    while task.wait(10) do
+    while task.wait(5) do
         if not ScreenGui or not ScreenGui.Parent then break end
         
         descargarFirebase()
         
         for _, player in ipairs(Players:GetPlayers()) do
-            local miIdTexto = tostring(player.UserId)
-            if firebaseTags[miIdTexto] then
-                local tieneTag = false
-                if player.Character and player.Character:FindFirstChild("Head") then
-                    for _, child in ipairs(ScreenGui:GetChildren()) do
-                        if child.Name == "BloxyTag_Dynamic" and child.Adornee == player.Character.Head then 
-                            tieneTag = true 
-                        end
-                    end
-                    if not tieneTag then applyTagToPlayer(player) end
-                end
-            end
+            applyTagToPlayer(player)
         end
     end
 end)
