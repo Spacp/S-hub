@@ -9,7 +9,7 @@ local SoundService = game:GetService("SoundService")
 local LocalPlayer = Players.LocalPlayer
 
 -- ==========================================
--- 1. BASE DE DATOS (SIMPLE)
+-- 1. BASE DE DATOS
 -- ==========================================
 local firebaseUrl = "https://space-tagsp-default-rtdb.firebaseio.com/Activos.json"
 local myIdStr = tostring(LocalPlayer.UserId)
@@ -21,7 +21,7 @@ local usuariosActivos = {}
 -- Auto-Anotarse al ejecutar
 if requestFunc then
     local datos = {}
-    datos[myIdStr] = true -- Solo guardamos "true"
+    datos[myIdStr] = true 
     requestFunc({
         Url = firebaseUrl,
         Method = "PATCH",
@@ -173,6 +173,7 @@ local function crearTagVisual(player, head)
     AliasLabel.LayoutOrder = 2 
     AliasLabel.ZIndex = 3
 
+    -- TELETRANSPORTE (Bloqueado para ti mismo)
     TagButton.Activated:Connect(function()
         if player == LocalPlayer then return end
         pcall(function()
@@ -189,6 +190,7 @@ local function crearTagVisual(player, head)
 
     local isExpanded = false
     local orbTimer = 0
+    -- AQUÍ: SOLO SE MUESTRA EL NOMBRE
     local displayAliasText = player.DisplayName
     
     RunService.RenderStepped:Connect(function(dt)
@@ -279,24 +281,45 @@ local function crearTagVisual(player, head)
 end
 
 -- ==========================================
--- 3. BUCLE MAESTRO
+-- 3. BUCLE MAESTRO (BUSCADOR REPARADO)
 -- ==========================================
+-- Esta función busca correctamente en la pantalla para no crear clones
+local function obtenerTagDeJugador(cabeza)
+    for _, gui in ipairs(ScreenGui:GetChildren()) do
+        if gui.Name == "BloxyTag_Dynamic" and gui.Adornee == cabeza then
+            return gui
+        end
+    end
+    return nil
+end
+
 task.spawn(function()
     while task.wait(1) do
+        -- LIMPIEZA: Si un jugador murió, borramos su tag flotante
+        for _, gui in ipairs(ScreenGui:GetChildren()) do
+            if gui.Name == "BloxyTag_Dynamic" and (not gui.Adornee or not gui.Adornee.Parent) then
+                gui:Destroy()
+            end
+        end
+
         for _, player in ipairs(Players:GetPlayers()) do
             local idStr = tostring(player.UserId)
             
+            -- Si el jugador ESTÁ en la base de datos...
             if usuariosActivos[idStr] == true then
                 if player.Character and player.Character:FindFirstChild("Head") then
                     local head = player.Character.Head
-                    if not head:FindFirstChild("BloxyTag_Dynamic") then
+                    
+                    -- CANDADO SEGURO: Si no encuentra el tag, lo crea.
+                    if not obtenerTagDeJugador(head) then
                         crearTagVisual(player, head)
                     end
                 end
             else
+                -- Si NO está en la base de datos, le borramos el tag si es que lo tiene
                 if player.Character and player.Character:FindFirstChild("Head") then
                     local head = player.Character.Head
-                    local tagViejo = head:FindFirstChild("BloxyTag_Dynamic")
+                    local tagViejo = obtenerTagDeJugador(head)
                     if tagViejo then
                         tagViejo:Destroy()
                     end
