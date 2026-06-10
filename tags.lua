@@ -1,4 +1,4 @@
--- SCRIPT DE ETIQUETAS ESP (SOLO USUARIOS DE FIREBASE)
+-- SCRIPT DE ETIQUETAS ESP (AUTO-REGISTRO AUTOMÁTICO)
 local HttpService = game:GetService("HttpService")
 local TweenService = game:GetService("TweenService")
 local Players = game:GetService("Players")
@@ -10,22 +10,57 @@ local SoundService = game:GetService("SoundService")
 local LocalPlayer = Players.LocalPlayer
 
 -- ==========================================
--- CONEXIÓN A FIREBASE
+-- CONEXIÓN A FIREBASE Y AUTO-REGISTRO
 -- ==========================================
 local firebaseUrl = "https://space-tagsp-default-rtdb.firebaseio.com/.json"
 local firebaseTags = {} 
 
-local function actualizarFirebase()
+-- Esta función es la que usan los ejecutores para enviar datos a internet
+local requestFunc = request or http_request or syn.request or fluxus.request
+
+-- 1. Función para descargar la lista
+local function descargarFirebase()
     local success, response = pcall(function()
         return game:HttpGet(firebaseUrl)
     end)
     if success and response and response ~= "null" then
         firebaseTags = HttpService:JSONDecode(response)
+    else
+        firebaseTags = {}
     end
 end
 
--- Descargar la base de datos
-actualizarFirebase()
+-- 2. FUNCIÓN MÁGICA: Auto-registrar a quien ejecute el script
+local function autoRegistrar()
+    descargarFirebase() -- Descargamos para ver quién está
+    
+    local miIdTexto = tostring(LocalPlayer.UserId)
+    
+    -- Si no estoy en Firebase, me añado automáticamente
+    if not firebaseTags[miIdTexto] then
+        if requestFunc then
+            local datosNuevos = {}
+            datosNuevos[miIdTexto] = "Usuario" -- El tag por defecto que se le da a tus amigos
+            
+            -- Enviamos nuestra ID a Firebase
+            requestFunc({
+                Url = firebaseUrl,
+                Method = "PATCH",
+                Headers = {["Content-Type"] = "application/json"},
+                Body = HttpService:JSONEncode(datosNuevos)
+            })
+            
+            -- Volvemos a descargar la lista para que ahora sí aparezcamos
+            task.wait(1)
+            descargarFirebase()
+        else
+            print("Tu ejecutor no soporta auto-registro.")
+        end
+    end
+end
+
+-- Ejecutamos el auto-registro nada más empezar
+autoRegistrar()
 -- ==========================================
 
 -- Crear el GUI
@@ -58,7 +93,7 @@ local function applyTagToPlayer(player)
         local miIdTexto = tostring(player.UserId)
         local tagDelJugador = firebaseTags[miIdTexto]
         
-        -- Si el jugador NO está en la base de datos, no hacemos nada
+        -- Si el jugador NO está en la base de datos, lo ignoramos
         if not tagDelJugador then return end 
         
         local function apply(character)
@@ -169,7 +204,6 @@ local function applyTagToPlayer(player)
             -- SISTEMA DE TELETRANSPORTE AL HACER CLIC
             -----------------------------------------------------
             TagButton.Activated:Connect(function()
-                -- AQUÍ ESTÁ EL BLOQUEO: Si el jugador eres TÚ MISMO, cancela el TP.
                 if player == LocalPlayer then return end
                 
                 pcall(function()
@@ -178,11 +212,8 @@ local function applyTagToPlayer(player)
                     
                     if lpChar and lpChar:FindFirstChild("HumanoidRootPart") and targetChar and targetChar:FindFirstChild("HumanoidRootPart") then
                         PlayTeleportSound() 
-                        
                         local targetHRP = targetChar.HumanoidRootPart
-                        -- Te teletransporta 4 studs al lado de él
                         local newCFrame = targetHRP.CFrame * CFrame.new(4, 0, 2) 
-                        
                         lpChar:PivotTo(newCFrame)
                     end
                 end)
@@ -191,8 +222,6 @@ local function applyTagToPlayer(player)
 
             local isExpanded = false
             local orbTimer = 0
-            
-            -- FORMATO DEL TEXTO: [Tag] Nombre
             local displayAliasText = "[" .. tagDelJugador .. "] " .. player.DisplayName
             
             RunService.RenderStepped:Connect(function(dt)
@@ -287,27 +316,25 @@ local function applyTagToPlayer(player)
     end)
 end
 
--- Aplicar a los jugadores que ya están en el servidor (INCLUYÉNDOTE A TI)
+-- Aplicar tags a todos
 for _, player in ipairs(Players:GetPlayers()) do
     applyTagToPlayer(player)
 end
 
--- Aplicar a jugadores nuevos que se conecten
 Players.PlayerAdded:Connect(function(player)
     task.wait(2)
     applyTagToPlayer(player)
 end)
 
--- Bucle que actualiza Firebase y busca jugadores sin tag cada 15 seg
+-- Actualizar a los demás jugadores
 task.spawn(function()
-    while task.wait(15) do
+    while task.wait(10) do
         if not ScreenGui or not ScreenGui.Parent then break end
         
-        actualizarFirebase()
+        descargarFirebase()
         
         for _, player in ipairs(Players:GetPlayers()) do
             local miIdTexto = tostring(player.UserId)
-            
             if firebaseTags[miIdTexto] then
                 local tieneTag = false
                 if player.Character and player.Character:FindFirstChild("Head") then
