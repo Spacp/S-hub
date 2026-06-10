@@ -8,7 +8,6 @@ local HttpService = game:GetService("HttpService")
 
 local LocalPlayer = Players.LocalPlayer
 
--- Crear el GUI contenedor de los Tags
 local guiName = "BloxyTags_External_GUI"
 local targetParent = pcall(function() return CoreGui.Name end) and CoreGui or LocalPlayer:WaitForChild("PlayerGui", 5)
 
@@ -22,47 +21,47 @@ ScreenGui.Parent = targetParent
 ScreenGui.ResetOnSpawn = false
 
 -- ========================================================
--- [FIREBASE] SUSTITUTO DEL SISTEMA DE AMIGOS
+-- [FIREBASE] SISTEMA DE LATIDO Y AUTO-LIMPIEZA
 -- ========================================================
 local firebaseUrl = "https://space-tagsp-default-rtdb.firebaseio.com/Activos.json"
 local firebaseCache = {}
 
 local req = request or http_request or syn.request or fluxus.request
 
-if req then
-    pcall(function()
-        local payload = {}
-        payload[tostring(LocalPlayer.UserId)] = "Usuario"
-        req({
-            Url = firebaseUrl,
-            Method = "PATCH",
-            Headers = {["Content-Type"] = "application/json"},
-            Body = HttpService:JSONEncode(payload)
-        })
-    end)
+-- Función para avisar que sigues vivo (Latido)
+local function enviarLatido()
+    if req then
+        pcall(function()
+            local payload = {}
+            payload[tostring(LocalPlayer.UserId)] = os.time() -- Guarda la hora actual
+            req({
+                Url = firebaseUrl,
+                Method = "PATCH",
+                Headers = {["Content-Type"] = "application/json"},
+                Body = HttpService:JSONEncode(payload)
+            })
+        end)
+    end
 end
 
-local function borrar()
+-- Enviar el latido cada 10 segundos
+enviarLatido()
+task.spawn(function()
+    while task.wait(10) do
+        enviarLatido()
+    end
+end)
+
+-- Intentar borrarse por si el juego cierra normal
+local function borrarMiID()
     if req then
         pcall(function() req({Url = "https://space-tagsp-default-rtdb.firebaseio.com/Activos/"..tostring(LocalPlayer.UserId)..".json", Method = "DELETE"}) end)
     end
 end
-pcall(function() game:BindToClose(borrar) end)
-Players.PlayerRemoving:Connect(function(p) if p == LocalPlayer then borrar() end end)
+pcall(function() game:BindToClose(borrarMiID) end)
+Players.PlayerRemoving:Connect(function(p) if p == LocalPlayer then borrarMiID() end end)
 
-task.spawn(function()
-    while task.wait(2) do
-        pcall(function()
-            local res = game:HttpGet(firebaseUrl .. "?nocache=" .. tostring(math.random(10000, 99999)))
-            if res and res ~= "null" then
-                firebaseCache = HttpService:JSONDecode(res)
-            else
-                firebaseCache = {}
-            end
-        end)
-    end
-end)
-
+-- Función de búsqueda
 local function isFriend(player)
     local idStr = tostring(player.UserId)
     if firebaseCache[idStr] then return true end
@@ -82,14 +81,13 @@ local function PlayTeleportSound()
 end
 
 -- ========================================================
--- FUNCIÓN VISUAL AISLADA (Para evitar clones)
+-- FUNCIÓN VISUAL (Intacta)
 -- ========================================================
 local function createVisualTag(player, character)
     local head = character:WaitForChild("Head", 5)
     local humanoid = character:WaitForChild("Humanoid", 5)
     if not head then return end
     
-    -- 🔒 CANDADO ANTI-CLONES: Si ya tiene tag, cancelamos
     for _, child in ipairs(ScreenGui:GetChildren()) do
         if child.Name == "BloxyTag_Dynamic" and child.Adornee == head then return end
     end
@@ -191,7 +189,6 @@ local function createVisualTag(player, character)
     AliasLabel.LayoutOrder = 2 
     AliasLabel.ZIndex = 3
 
-    -- TP BLOQUEADO PARA TI MISMO
     TagButton.Activated:Connect(function()
         if player == LocalPlayer then return end
         pcall(function()
@@ -298,7 +295,7 @@ local function createVisualTag(player, character)
 end
 
 -- ========================================================
--- CONTROLADOR DE JUGADORES (Evita que el código se duplique)
+-- CONTROLADORES
 -- ========================================================
 local connectedPlayers = {}
 
@@ -307,7 +304,7 @@ local function setupPlayer(player)
     connectedPlayers[player.UserId] = true
 
     local function onCharacterAdded(character)
-        task.wait(0.5) -- Pequeño respiro para que cargue la cabeza
+        task.wait(0.5) 
         if isFriend(player) then
             createVisualTag(player, character)
         end
@@ -317,18 +314,41 @@ local function setupPlayer(player)
     player.CharacterAdded:Connect(onCharacterAdded)
 end
 
--- Inicializamos a todos los jugadores una única vez
 for _, player in ipairs(Players:GetPlayers()) do setupPlayer(player) end
 Players.PlayerAdded:Connect(setupPlayer)
 
--- Bucle Maestro (Revisa Firebase en secreto sin romper nada)
+-- BUCLE MAESTRO: Descarga Firebase y Limpia a los inactivos
 task.spawn(function()
-    while task.wait(2.5) do
+    while task.wait(3) do
         if not ScreenGui or not ScreenGui.Parent then break end
         
+        -- 1. Descargar Firebase
+        pcall(function()
+            local res = game:HttpGet(firebaseUrl .. "?nocache=" .. tostring(math.random(10000, 99999)))
+            if res and res ~= "null" then
+                firebaseCache = HttpService:JSONDecode(res)
+            else
+                firebaseCache = {}
+            end
+        end)
+        
+        local horaActual = os.time()
+        
+        -- 2. Limpieza Automática (Si alguien lleva 30 segundos sin latir, lo borramos de la DB)
+        for idRegistrado, ultimoLatido in pairs(firebaseCache) do
+            if type(ultimoLatido) == "number" then
+                if (horaActual - ultimoLatido) > 30 then
+                    if req then
+                        pcall(function() req({Url = "https://space-tagsp-default-rtdb.firebaseio.com/Activos/"..idRegistrado..".json", Method = "DELETE"}) end)
+                    end
+                    firebaseCache[idRegistrado] = nil -- Lo quitamos localmente
+                end
+            end
+        end
+        
+        -- 3. Actualizar los carteles visuales
         for _, player in ipairs(Players:GetPlayers()) do
             if isFriend(player) then
-                -- Si está en Firebase y se le cayó el tag, se lo ponemos
                 if player.Character and player.Character:FindFirstChild("Head") then
                     local hasTag = false
                     for _, child in ipairs(ScreenGui:GetChildren()) do
@@ -340,7 +360,6 @@ task.spawn(function()
                     if not hasTag then createVisualTag(player, player.Character) end
                 end
             else
-                -- Si ya no está en Firebase, le quitamos el tag
                 if player.Character and player.Character:FindFirstChild("Head") then
                     for _, child in ipairs(ScreenGui:GetChildren()) do
                         if child.Name == "BloxyTag_Dynamic" and child.Adornee == player.Character.Head then 
