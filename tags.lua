@@ -158,7 +158,7 @@ local function createVisualTag(player, character)
     LogoStroke.Transparency = 1 
 
     local FriendIcon = Instance.new("ImageLabel", LogoContainer)
-    FriendIcon.Size = UDim2.new(0.7, 0, 0.7, 0)
+    FriendIcon.Size = UDim2.new(0.9, 0, 0.9, 0)
     FriendIcon.AnchorPoint = Vector2.new(0.5, 0.5)
     FriendIcon.Position = UDim2.new(0.5, 0, 0.5, 0)
     FriendIcon.BackgroundTransparency = 1
