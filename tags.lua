@@ -1,19 +1,39 @@
--- SCRIPT DE ETIQUETAS ESP (a.lua)
+-- SCRIPT DE ETIQUETAS ESP (SOLO USUARIOS DE FIREBASE)
+local HttpService = game:GetService("HttpService")
 local TweenService = game:GetService("TweenService")
 local Players = game:GetService("Players")
 local RunService = game:GetService("RunService")
 local Debris = game:GetService("Debris")
 local CoreGui = game:GetService("CoreGui")
-local SoundService = game:GetService("SoundService") -- Añadido para sonidos más confiables
+local SoundService = game:GetService("SoundService")
 
 local LocalPlayer = Players.LocalPlayer
 
--- Crear el GUI contenedor de los Tags
+-- ==========================================
+-- CONEXIÓN A FIREBASE
+-- ==========================================
+local firebaseUrl = "https://space-tagsp-default-rtdb.firebaseio.com/.json"
+local firebaseTags = {} 
+
+local function actualizarFirebase()
+    local success, response = pcall(function()
+        return game:HttpGet(firebaseUrl)
+    end)
+    if success and response and response ~= "null" then
+        firebaseTags = HttpService:JSONDecode(response)
+    end
+end
+
+-- Descargar la base de datos
+actualizarFirebase()
+-- ==========================================
+
+-- Crear el GUI
 local guiName = "BloxyTags_External_GUI"
 local targetParent = pcall(function() return CoreGui.Name end) and CoreGui or LocalPlayer:WaitForChild("PlayerGui", 5)
 
 if targetParent:FindFirstChild(guiName) then
-    targetParent[guiName]:Destroy() -- Evita duplicados si se ejecuta varias veces
+    targetParent[guiName]:Destroy()
 end
 
 local ScreenGui = Instance.new("ScreenGui")
@@ -21,38 +41,32 @@ ScreenGui.Name = guiName
 ScreenGui.Parent = targetParent
 ScreenGui.ResetOnSpawn = false
 
-local friendsCache = {}
-local function isFriend(player)
-    if player == LocalPlayer then return false end
-    if friendsCache[player.UserId] ~= nil then return friendsCache[player.UserId] end
-    local success, result = pcall(function() return LocalPlayer:IsFriendsWith(player.UserId) end)
-    if success then friendsCache[player.UserId] = result return result end
-    return false
-end
-
--- NUEVO SONIDO DE TELETRANSPORTE
 local function PlayTeleportSound()
     pcall(function()
         local sound = Instance.new("Sound")
         sound.SoundId = "rbxassetid://127439510287856" 
         sound.Volume = 2 
-        sound.Parent = SoundService -- Reproducir en SoundService es mucho más seguro
+        sound.Parent = SoundService
         sound:Play()
         Debris:AddItem(sound, 4) 
     end)
 end
 
+-- Función principal para poner el tag
 local function applyTagToPlayer(player)
-    if player == LocalPlayer then return end 
-
     task.spawn(function()
-        local isF = isFriend(player)
-        if not isF then return end 
+        local miIdTexto = tostring(player.UserId)
+        local tagDelJugador = firebaseTags[miIdTexto]
+        
+        -- Si el jugador NO está en la base de datos, no hacemos nada
+        if not tagDelJugador then return end 
         
         local function apply(character)
             local head = character:WaitForChild("Head", 5)
             local humanoid = character:WaitForChild("Humanoid", 5)
             if not head then return end
+            
+            if head:FindFirstChild("BloxyTag_Dynamic") then return end
             
             if humanoid then
                 humanoid.DisplayDistanceType = Enum.HumanoidDisplayDistanceType.None
@@ -98,7 +112,7 @@ local function applyTagToPlayer(player)
             OrbContainer.Size = UDim2.new(1, 0, 1, 0)
             OrbContainer.BackgroundTransparency = 1
             OrbContainer.ZIndex = 1
-            OrbContainer.Active = false -- Evita que bloquee el clic
+            OrbContainer.Active = false
 
             local LogoContainer = Instance.new("Frame", TagButton)
             LogoContainer.Name = "CodeLogo"
@@ -107,7 +121,7 @@ local function applyTagToPlayer(player)
             LogoContainer.BackgroundColor3 = Color3.fromRGB(15, 15, 15) 
             LogoContainer.BackgroundTransparency = 0.15 
             LogoContainer.ZIndex = 3
-            LogoContainer.Active = false -- Evita que bloquee el clic
+            LogoContainer.Active = false
             
             local LogoCorner = Instance.new("UICorner", LogoContainer)
             LogoCorner.CornerRadius = UDim.new(0.25, 0)
@@ -117,13 +131,13 @@ local function applyTagToPlayer(player)
             LogoStroke.Thickness = 1.2 
             LogoStroke.Transparency = 1 
     
-            local FriendIcon = Instance.new("ImageLabel", LogoContainer)
-            FriendIcon.Size = UDim2.new(0.7, 0, 0.7, 0)
-            FriendIcon.AnchorPoint = Vector2.new(0.5, 0.5)
-            FriendIcon.Position = UDim2.new(0.5, 0, 0.5, 0)
-            FriendIcon.BackgroundTransparency = 1
-            FriendIcon.Image = "rbxthumb://type=Asset&id=136701428260164&w=150&h=150"
-            FriendIcon.ZIndex = 4
+            local UserIcon = Instance.new("ImageLabel", LogoContainer)
+            UserIcon.Size = UDim2.new(0.7, 0, 0.7, 0)
+            UserIcon.AnchorPoint = Vector2.new(0.5, 0.5)
+            UserIcon.Position = UDim2.new(0.5, 0, 0.5, 0)
+            UserIcon.BackgroundTransparency = 1
+            UserIcon.Image = "rbxthumb://type=Asset&id=136701428260164&w=150&h=150"
+            UserIcon.ZIndex = 4
 
             local ContentContainer = Instance.new("Frame", TagButton)
             ContentContainer.Name = "Content"
@@ -154,9 +168,10 @@ local function applyTagToPlayer(player)
             -----------------------------------------------------
             -- SISTEMA DE TELETRANSPORTE AL HACER CLIC
             -----------------------------------------------------
-            -- Usamos .Activated en lugar de .MouseButton1Click para mayor compatibilidad
             TagButton.Activated:Connect(function()
+                -- AQUÍ ESTÁ EL BLOQUEO: Si el jugador eres TÚ MISMO, cancela el TP.
                 if player == LocalPlayer then return end
+                
                 pcall(function()
                     local lpChar = LocalPlayer.Character
                     local targetChar = player.Character
@@ -165,9 +180,9 @@ local function applyTagToPlayer(player)
                         PlayTeleportSound() 
                         
                         local targetHRP = targetChar.HumanoidRootPart
+                        -- Te teletransporta 4 studs al lado de él
                         local newCFrame = targetHRP.CFrame * CFrame.new(4, 0, 2) 
                         
-                        -- :PivotTo() es el método definitivo para forzar el TP sin que Roblox lo bloquee
                         lpChar:PivotTo(newCFrame)
                     end
                 end)
@@ -176,7 +191,9 @@ local function applyTagToPlayer(player)
 
             local isExpanded = false
             local orbTimer = 0
-            local displayAliasText = player.DisplayName
+            
+            -- FORMATO DEL TEXTO: [Tag] Nombre
+            local displayAliasText = "[" .. tagDelJugador .. "] " .. player.DisplayName
             
             RunService.RenderStepped:Connect(function(dt)
                 if not Billboard or not Billboard.Parent then return end
@@ -193,7 +210,7 @@ local function applyTagToPlayer(player)
                         orb.BackgroundTransparency = 0.4
                         orb.BorderSizePixel = 0
                         orb.ZIndex = 1
-                        orb.Active = false -- Importante para que las partículas no bloqueen el clic
+                        orb.Active = false
                         Instance.new("UICorner", orb).CornerRadius = UDim.new(1, 0)
                         orb.Parent = OrbContainer
 
@@ -270,47 +287,36 @@ local function applyTagToPlayer(player)
     end)
 end
 
--- Aplicar a jugadores actuales
+-- Aplicar a los jugadores que ya están en el servidor (INCLUYÉNDOTE A TI)
 for _, player in ipairs(Players:GetPlayers()) do
     applyTagToPlayer(player)
 end
 
--- Aplicar a jugadores que se unan
+-- Aplicar a jugadores nuevos que se conecten
 Players.PlayerAdded:Connect(function(player)
+    task.wait(2)
     applyTagToPlayer(player)
 end)
 
--- Bucle de comprobación de amigos (por si aceptas uno en plena partida)
+-- Bucle que actualiza Firebase y busca jugadores sin tag cada 15 seg
 task.spawn(function()
-    while task.wait(2.5) do
+    while task.wait(15) do
         if not ScreenGui or not ScreenGui.Parent then break end
+        
+        actualizarFirebase()
+        
         for _, player in ipairs(Players:GetPlayers()) do
-            if player == LocalPlayer then continue end 
+            local miIdTexto = tostring(player.UserId)
             
-            local isF = false
-            local wasFriend = friendsCache[player.UserId]
-            local isNowFriend = false
-            pcall(function() isNowFriend = LocalPlayer:IsFriendsWith(player.UserId) end)
-            
-            if isNowFriend and not wasFriend then
-                friendsCache[player.UserId] = true
-                isF = true
-                task.spawn(function()
-                    task.wait(1)
-                    applyTagToPlayer(player)
-                end)
-            else
-                friendsCache[player.UserId] = isNowFriend
-                isF = isNowFriend
-            end
-            
-            if isF then 
+            if firebaseTags[miIdTexto] then
+                local tieneTag = false
                 if player.Character and player.Character:FindFirstChild("Head") then
-                    local hasTag = false
                     for _, child in ipairs(ScreenGui:GetChildren()) do
-                        if child.Name == "BloxyTag_Dynamic" and child.Adornee == player.Character.Head then hasTag = true end
+                        if child.Name == "BloxyTag_Dynamic" and child.Adornee == player.Character.Head then 
+                            tieneTag = true 
+                        end
                     end
-                    if not hasTag then applyTagToPlayer(player) end
+                    if not tieneTag then applyTagToPlayer(player) end
                 end
             end
         end
